@@ -280,13 +280,14 @@ class Emissor:
         try:
             dias = duracao_em_dias(self.prazo.get(), self.dias.get())
             chaves = [emitir_venda(dias) for _ in range(quantidade)]
-            Path(destino).write_text("\n".join(chaves) + "\n", encoding="ascii")
+            conteudo = ("\n".join(chaves) + "\n").encode("ascii")
+            _gravar(Path(destino), conteudo, substituir=True)
         except (OSError, ValueError) as erro:
             messagebox.showerror("Gerar várias chaves", str(erro), parent=self.raiz)
             return
         self.resultado.set("")
         self.copiar.state(["disabled"])
-        self.situacao.set(f"{quantidade} chaves de venda salvas em arquivo. Guarde-o em local seguro.")
+        self.situacao.set(f"{quantidade} chaves salvas em {destino}. Guarde o arquivo em local seguro.")
 
     def copiar_licenca(self):
         if self.resultado.get():

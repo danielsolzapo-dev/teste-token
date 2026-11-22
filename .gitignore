@@ -9,6 +9,7 @@ ajustes.json
 partidas.json
 webhook_discord.txt
 licenca.txt
+chaves_autofarm*.txt
 *.dpapi
 *.pem
 *.tmp
