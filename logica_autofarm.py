@@ -1068,8 +1068,7 @@ class Fluxo:
             if alvo:
                 return self._clicar_e_verificar(alvo, quadro)
         alvo = None
-        if (self.config.resgatar_recompensas and not (partida or sem_controle or no_onibus or asa_delta)
-                and (cursor or self._prazo_lobby is not None)):
+        if self.config.resgatar_recompensas and not (partida or sem_controle or no_onibus or asa_delta):
             alvo = self.detector.recompensa(quadro)
         alvo = alvo or self.detector.detectar(quadro)
         if alvo:

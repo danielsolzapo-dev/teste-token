@@ -56,7 +56,8 @@ def identificar(linhas, largura, altura, tipo, *, sinalizar_ambiguidade=False):
     if tipo in ("cabecalho_recompensa", "recompensa", "nome_recompensa"):
         cabecalhos = ("ITENS ADQUIRIDOS", "ITEM ADQUIRIDO", "ITENS OBTIDOS", "ITEM OBTIDO",
                       "ITEMS ACQUIRED", "ITEM ACQUIRED", "RECOMPENSAS ADQUIRIDAS",
-                      "RECOMPENSAS OBTIDAS", "RECOMPENSAS RESGATADAS", "REWARDS EARNED")
+                      "RECOMPENSAS OBTIDAS", "RECOMPENSAS RESGATADAS", "REWARDS EARNED",
+                      "TESOURO ENCONTRADO", "RECOMPENSA DESBLOQUEADA", "RECOMPENSA CONQUISTADA")
         limite = 0.96 if tipo == "cabecalho_recompensa" else 0.40
         titulos = [linha for linha in combinar(linhas) if linha.centro[1] <= limite * altura
                    and normalizar(linha.texto).startswith(cabecalhos)]
