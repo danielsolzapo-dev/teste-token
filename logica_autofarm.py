@@ -75,6 +75,9 @@ class Config:
     aparencia: str = "azul"
     pausar_ao_obter_token: bool = False
     sair_quando_sozinho: bool = True
+    continuar_farmando: bool = False
+    pausar_programado: bool = False
+    pausa_apos_minutos: int = 60
 
 
 @dataclass(frozen=True)

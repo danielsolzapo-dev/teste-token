@@ -21,8 +21,10 @@ from PIL import Image, ImageGrab, ImageTk
 from atualizador import (ErroAtualizacao, baixar_atualizacao, buscar_atualizacao,
                          criar_script_instalacao, iniciar_instalacao, preparar_executavel)
 from diagnostico import Diagnostico
+from estado_local import carregar_estado, salvar_estado as gravar_estado_local
 from lobby_especial import MonitorLobby
-from logica_autofarm import ACOES_AEREAS, BOTOES_FILA, Config, Detector, Fluxo, TECLAS, TEMPLATES
+from logica_autofarm import (ACOES_AEREAS, BOTOES_FILA, BOTOES_LOBBY, Config, Detector, Fluxo,
+                             TECLAS, TEMPLATES)
 from painel_ativacao import obter_licenca
 from licenca import hoje_licenca
 from painel_replay import JanelaBaus
@@ -41,8 +43,10 @@ CONFIG = Path(os.getenv("LOCALAPPDATA", ".")) / "AutoFarmToken" / "ajustes.json"
 ARQUIVO_LOG = CONFIG.with_name("diagnostico.log")
 OPCOES = ("clicar_continuar", "fallback_cor", "sair_por_tempo", "anti_afk", "rotina_aerea",
           "atualizar_auto", "resgatar_recompensas", "notificar_tesouros", "regiao_auto",
-          "segundo_plano", "cursor_segundo_plano", "pausar_ao_obter_token", "sair_quando_sozinho")
-CAMPOS = (*OPCOES, "minutos_partida", "webhook_url", "regiao_manha", "regiao_noite", "aparencia")
+          "segundo_plano", "cursor_segundo_plano", "pausar_ao_obter_token", "sair_quando_sozinho",
+          "continuar_farmando", "pausar_programado")
+CAMPOS = (*OPCOES, "minutos_partida", "pausa_apos_minutos", "webhook_url", "regiao_manha",
+          "regiao_noite", "aparencia")
 ROTULOS = {
     "jogar": "Jogar Novamente", "continuar": "Continuar", "lobby_jogar": "Jogar",
     "lobby_pronto": "Pronto", "menu_aba": "Abrir menu", "voltar_lobby": "Voltar ao lobby",
@@ -66,6 +70,9 @@ def carregar_config():
         minutos = dados.get("minutos_partida")
         if type(minutos) in (int, float) and 1 <= minutos <= 60:
             ajustes["minutos_partida"] = minutos
+        pausa = dados.get("pausa_apos_minutos")
+        if type(pausa) is int and 1 <= pausa <= 1440:
+            ajustes["pausa_apos_minutos"] = pausa
         return replace(padrao, **ajustes)
     except (OSError, ValueError):
         return padrao
@@ -98,7 +105,7 @@ def salvar_captura_diagnostico(quadro, diagnostico, evento, arquivo):
         diagnostico.registrar(evento, captura=f"debug/{arquivo}")
 
 
-def monitorar(windows, fluxo, eventos, parar, diagnostico=None, *, lobby=None):
+def monitorar(windows, fluxo, eventos, parar, diagnostico=None, *, lobby=None, pausar_no_lobby=None):
     estado_anterior = acao_anterior = None
     dialogo_ambiguo_anterior = False
     leituras_anteriores = None
@@ -223,6 +230,14 @@ def monitorar(windows, fluxo, eventos, parar, diagnostico=None, *, lobby=None):
                         contagem_esquadrao = quantidade
                         if diagnostico:
                             diagnostico.registrar("hud_esquadrao", barras=quantidade)
+                if (pausar_no_lobby is not None and pausar_no_lobby.is_set()
+                        and not (partida or onibus or asa_delta or bloqueio_hud or derrubado)):
+                    if detector.procurar(quadro, BOTOES_LOBBY):
+                        if diagnostico:
+                            diagnostico.registrar("pausa_programada", resultado="lobby_confirmado")
+                        eventos.put(("pausa_programada_concluida", None))
+                        parar.set()
+                        break
                 etapa = "decidir"
                 acao = fluxo.passo(quadro, agora, partida=partida, cursor=cursor,
                                    no_onibus=onibus, hud_visivel=hud_visivel,
@@ -469,6 +484,9 @@ class Painel:
         self.licenca_expirada = False
         self.diagnostico = diagnostico
         self.config = config if config is not None else carregar_config()
+        self.estado_local = carregar_estado()
+        self.partidas_base = self.estado_local["partidas"]
+        self.partidas_sessao = 0
         self.fluxo = None
         self.monitor_lobby = None
         self.eventos = SimpleQueue()
@@ -479,13 +497,15 @@ class Painel:
         self.f7_anterior = False
         self.status = tk.StringVar(janela, "Pausado")
         self.atividade = tk.StringVar(janela, "Automação pausada. Use Iniciar ou F6 para retomar.")
-        self.total = tk.StringVar(janela, "0")
+        self.total = tk.StringVar(janela, str(self.partidas_base))
         self.proxima_saida = tk.StringVar(janela, "—")
         self.farmando = tk.StringVar(janela, "—")
-        self.relogio = RelogioPainel()
+        acumulado = self.estado_local["farmando_segundos"] if self.config.continuar_farmando else 0
+        self.relogio = RelogioPainel(acumulado)
         self.status_atualizacao = tk.StringVar(janela, f"Versão {VERSAO}")
         self.opcoes = {nome: tk.BooleanVar(janela, getattr(self.config, nome)) for nome in OPCOES}
         self.minutos = tk.StringVar(janela, f"{self.config.minutos_partida:g}".replace(".", ","))
+        self.pausa_apos_minutos = tk.StringVar(janela, str(self.config.pausa_apos_minutos))
         self.status_webhook = tk.StringVar(janela, "Webhook configurado" if self.config.webhook_url else "Webhook desativado")
         self.janela_webhook = self.botao_teste_webhook = None
         self.janela_regiao = None
@@ -493,6 +513,10 @@ class Painel:
         self.teste_webhook_em_curso = False
         self._pausado_visual = None
         self._proximo_relogio = 0.0
+        self._ultima_persistencia_estado = time.monotonic()
+        self.pausar_no_lobby = None
+        self._pausa_programada_pendente = False
+        self._pausa_programada_prazo = None
         self._ultima_atualizacao = time.monotonic()
 
         self.salvamento = ThreadPoolExecutor(max_workers=1, thread_name_prefix="Ajustes")
@@ -516,6 +540,11 @@ class Painel:
         janela.bind("<Map>", self._ao_mapear)
         janela.bind("<Destroy>", self._ao_destruir)
         self.montar(self.config.aparencia)
+        # Mantém a leitura de novos replays ativa durante a sessão, mesmo que
+        # o usuário não abra o painel de contagem.
+        self.janela_replay = JanelaBaus(janela, self.eventos)
+        self.janela_replay.withdraw()
+        self.janela_replay.iniciar(automatica=True)
         self.status.trace_add("write", self.decorar_estado)
         self._callback_interface = janela.after(45, self.atualizar)
         self._callback_atualizacao = janela.after(1000, self.verificar_automaticamente)
@@ -575,6 +604,24 @@ class Painel:
     def _registrar_diagnostico(self, evento, **dados):
         if self.diagnostico:
             self.salvamento.submit(self.diagnostico.registrar, evento, **dados)
+
+    def _salvar_estado_local(self):
+        estado = {
+            "partidas": self.partidas_base + self.partidas_sessao,
+            "farmando_segundos": (round(self.relogio.segundos_farmando(time.monotonic()))
+                                  if self.config.continuar_farmando else 0),
+        }
+        self.estado_local = estado
+        try:
+            self.salvamento.submit(self._gravar_estado_local, estado)
+        except RuntimeError:
+            pass
+
+    def _gravar_estado_local(self, estado):
+        try:
+            gravar_estado_local(estado)
+        except OSError:
+            self.eventos.put(("erro", "Não foi possível salvar o contador e o tempo Farmando."))
 
     def decorar_estado(self, *_):
         pausado = self.status.get() in ("Pausado", "Pausando")
@@ -691,6 +738,24 @@ class Painel:
         minutos = tuple(f"{passo / 2:g}".replace(".", ",") for passo in range(2, 121))
         ttk.Spinbox(campo, textvariable=self.minutos, values=minutos, width=8).pack(side="left", padx=(0, 8))
         ttk.Label(campo, text="1–60 min", style="CardInfo.TLabel").pack(side="left")
+
+        programacao = ttk.Frame(painel, style="Card.TFrame", padding=(13, 10))
+        programacao.pack(fill="x", pady=(0, 9))
+        ttk.Label(programacao, text="Programação", style="Secao.TLabel").pack(anchor="w", pady=(0, 4))
+        ttk.Checkbutton(programacao, text="Continuar o cronômetro Farmando ao reabrir",
+                        variable=self.opcoes["continuar_farmando"], command=self.salvar_preferencia_cronometro,
+                        style=self.tema.switch).pack(fill="x")
+        linha_pausa = ttk.Frame(programacao, style="CardInterior.TFrame")
+        linha_pausa.pack(fill="x", pady=(4, 0))
+        ttk.Checkbutton(linha_pausa, text="Pausar no lobby após", variable=self.opcoes["pausar_programado"],
+                        command=self.salvar_preferencia_programacao,
+                        style=self.tema.switch).pack(side="left", fill="x", expand=True)
+        campo_pausa = ttk.Spinbox(linha_pausa, from_=1, to=1440, textvariable=self.pausa_apos_minutos, width=6)
+        campo_pausa.pack(side="left", padx=(6, 4))
+        campo_pausa.bind("<FocusOut>", lambda _: self.salvar_preferencia_programacao())
+        campo_pausa.bind("<Return>", lambda _: self.salvar_preferencia_programacao())
+        ttk.Label(linha_pausa, text="min", style="CardInfo.TLabel").pack(side="left")
+
         self.botao = self.botao_com_icone(painel, "Iniciar", "play", self.alternar, principal=True)
         self.botao.pack(fill="x", pady=(0, 8))
         ferramentas = ttk.Frame(painel)
@@ -1025,14 +1090,50 @@ class Painel:
         minutos = float(self.minutos.get().replace(",", "."))
         if not 1 <= minutos <= 60:
             raise ValueError("Informe um tempo de partida entre 1 e 60 minutos.")
-        return replace(self.config, minutos_partida=minutos,
+        try:
+            pausa = int(self.pausa_apos_minutos.get())
+        except ValueError:
+            pausa = 0
+        programada = self.opcoes["pausar_programado"].get()
+        if programada and not 1 <= pausa <= 1440:
+            raise ValueError("Informe um tempo de pausa programada entre 1 e 1.440 minutos.")
+        return replace(self.config, minutos_partida=minutos, pausa_apos_minutos=pausa or 60,
                        **{nome: var.get() for nome, var in self.opcoes.items()})
+
+    def salvar_preferencia_cronometro(self):
+        continuar = self.opcoes["continuar_farmando"].get()
+        self.config = replace(self.config, continuar_farmando=continuar)
+        self._salvar_preferencias()
+        if self.worker is None and continuar and self.relogio.segundos_farmando(time.monotonic()) == 0:
+            self.relogio = RelogioPainel(self.estado_local["farmando_segundos"])
+        self.atualizar_relogio(time.monotonic())
+        self._salvar_estado_local()
+
+    def salvar_preferencia_programacao(self):
+        try:
+            pausa = int(self.pausa_apos_minutos.get())
+        except ValueError:
+            pausa = 0
+        programada = self.opcoes["pausar_programado"].get()
+        if programada and not 1 <= pausa <= 1440:
+            self.atividade.set("Informe uma pausa programada entre 1 e 1.440 minutos.")
+            return
+        config = replace(self.config, pausar_programado=programada, pausa_apos_minutos=pausa or 60)
+        self.config = config
+        self._salvar_preferencias()
+        if self.worker is not None and self.worker.is_alive() and not self.parar.is_set():
+            self._pausa_programada_prazo = (time.monotonic() + config.pausa_apos_minutos * 60
+                                            if config.pausar_programado else None)
+            self._pausa_programada_pendente = False
+            if self.pausar_no_lobby:
+                self.pausar_no_lobby.clear()
 
     def alternar(self, origem="botao"):
         if self.worker is not None:
             if not self.parar.is_set():
                 self.parar.set()
                 self.relogio.pausar(time.monotonic())
+                self._salvar_estado_local()
                 self.botao.state(["disabled"])
                 self.atividade.set(SOLTANDO_CONTROLES)
                 self.atualizar_pausa()
@@ -1049,14 +1150,19 @@ class Painel:
                            "Coloque o Fortnite em primeiro plano.")
         self.relogio.prazo_saida = self.fluxo.prazo_saida if self.fluxo else None
         self._proximo_relogio = 0.0
-        self.relogio.iniciar(time.monotonic())
+        agora = time.monotonic()
+        self.relogio.iniciar(agora)
+        self._pausa_programada_pendente = False
+        self._pausa_programada_prazo = (agora + config.pausa_apos_minutos * 60
+                                        if config.pausar_programado else None)
         self.status.set("Iniciando")
         self.botao.configure(text="Pausar")
         self.parar = Event()
-        self.worker = Thread(target=self._executar_sessao, args=(self.parar,))
+        self.pausar_no_lobby = Event()
+        self.worker = Thread(target=self._executar_sessao, args=(self.parar, self.pausar_no_lobby))
         self.worker.start()
 
-    def _executar_sessao(self, parar):
+    def _executar_sessao(self, parar, pausar_no_lobby):
         try:
             reduzir_prioridade_thread()
             if self.fluxo is None:
@@ -1070,7 +1176,7 @@ class Painel:
                 self.diagnostico.registrar("espera_fila_rearmada_por_iniciar")
             contexto = self.windows, self.fluxo, self.eventos, parar, self.diagnostico
             Thread(target=monitorar_tesouros, args=contexto, daemon=True).start()
-            monitorar(*contexto, lobby=self.monitor_lobby)
+            monitorar(*contexto, lobby=self.monitor_lobby, pausar_no_lobby=pausar_no_lobby)
         except (OSError, ValueError, cv2.error) as erro:
             self.eventos.put(("erro", f"Não foi possível iniciar a automação. {erro}"))
         finally:
@@ -1082,6 +1188,7 @@ class Painel:
         if not self.worker.is_alive():
             self.worker = None
             self.relogio.pausar(time.monotonic())
+            self._salvar_estado_local()
             self.status.set("Pausado")
             self.botao.configure(text="Iniciar")
             self.botao.state(["!disabled"])
@@ -1185,6 +1292,14 @@ class Painel:
             if f7 and not self.f7_anterior and self.worker is not None and self.worker.is_alive():
                 self._registrar_diagnostico("falha_marcada_pelo_usuario", estado=self.status.get())
             self.f7_anterior = f7
+        if (self.worker is not None and self.worker.is_alive() and self.parar is not None
+                and not self.parar.is_set() and self._pausa_programada_prazo is not None
+                and not self._pausa_programada_pendente and agora >= self._pausa_programada_prazo):
+            self._pausa_programada_pendente = True
+            if self.pausar_no_lobby:
+                self.pausar_no_lobby.set()
+            self.atividade.set("Tempo atingido; aguardando o lobby para pausar automaticamente.")
+            self._registrar_diagnostico("pausa_programada", resultado="aguardando_lobby")
         self._processar_atualizacao()
         for _ in range(24):
             try:
@@ -1195,7 +1310,15 @@ class Painel:
                 if self.parar is not None and not self.parar.is_set() and self.status.get() != valor:
                     self.status.set(valor)
             elif evento == "total":
-                self.total.set(str(valor))
+                if type(valor) is int and valor >= 0:
+                    self.partidas_sessao = max(self.partidas_sessao, valor)
+                    self.total.set(str(self.partidas_base + self.partidas_sessao))
+                    self._salvar_estado_local()
+            elif evento == "pausa_programada_concluida":
+                self._pausa_programada_pendente = False
+                self._pausa_programada_prazo = None
+                self.atividade.set("Pausado no lobby pelo tempo programado.")
+                self._registrar_diagnostico("pausa_programada", resultado="pausado_no_lobby")
             elif evento in ("lendo_replay", "baus_replay"):
                 if self.janela_replay and self.janela_replay.winfo_exists():
                     if evento == "lendo_replay":
@@ -1245,6 +1368,9 @@ class Painel:
         if agora >= self._proximo_relogio:
             self._proximo_relogio = agora + 0.25
             self.atualizar_relogio(agora)
+        if agora - self._ultima_persistencia_estado >= 10:
+            self._ultima_persistencia_estado = agora
+            self._salvar_estado_local()
         if self.fechando and (self.worker is None or not self.worker.is_alive()):
             self.janela.destroy()
         else:
@@ -1260,6 +1386,7 @@ class Painel:
     def fechar(self):
         self.fechando = True
         self.relogio.pausar(time.monotonic())
+        self._salvar_estado_local()
         if self.parar:
             self.parar.set()
 

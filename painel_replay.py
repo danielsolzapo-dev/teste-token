@@ -6,6 +6,7 @@ import tkinter as tk
 from tkinter import filedialog, ttk
 
 import baus_replay
+import historico_baus
 
 
 class JanelaBaus(tk.Toplevel):
@@ -24,6 +25,12 @@ class JanelaBaus(tk.Toplevel):
         self.voce = tk.StringVar(self, "—")
         self.esquadrao = tk.StringVar(self, "—")
         self.detalhe = tk.StringVar(self, "Procurando o último replay concluído…")
+        self.historico = historico_baus.carregar()
+        self.hoje = tk.StringVar(self)
+        self.melhor_dia = tk.StringVar(self)
+        self.recorde = tk.StringVar(self)
+        self.media = tk.StringVar(self)
+        self.ultima_partida = tk.StringVar(self)
 
         painel = ttk.Frame(self, padding=18)
         painel.pack(fill="both", expand=True)
@@ -45,8 +52,69 @@ class JanelaBaus(tk.Toplevel):
             ttk.Label(card, textvariable=valor, style="MetricaCard.TLabel").pack(anchor="w")
         ttk.Label(painel, textvariable=self.detalhe, style="Info.TLabel", wraplength=400,
                   justify="left").pack(anchor="w", pady=(10, 0))
-        ttk.Label(painel, text="Novas partidas são analisadas enquanto esta janela estiver aberta.",
+        resumo = ttk.LabelFrame(painel, text="Histórico", padding=10)
+        resumo.pack(fill="x", pady=(12, 0))
+        for indice, (rotulo, variavel) in enumerate((
+                ("Hoje · squad", self.hoje), ("Melhor dia", self.melhor_dia),
+                ("Recorde por partida", self.recorde), ("Média por partida", self.media))):
+            ttk.Label(resumo, text=rotulo, style="MetricaInfo.TLabel").grid(
+                row=indice // 2 * 2, column=indice % 2, sticky="w", padx=(0, 12), pady=(2, 0))
+            ttk.Label(resumo, textvariable=variavel, style="MetricaCard.TLabel").grid(
+                row=indice // 2 * 2 + 1, column=indice % 2, sticky="w", padx=(0, 12), pady=(0, 5))
+        ttk.Label(resumo, text="Baús do squad nos últimos 7 dias", style="MetricaInfo.TLabel").grid(
+            row=4, column=0, columnspan=2, sticky="w", pady=(4, 0))
+        estilo = ttk.Style()
+        self.grafico = tk.Canvas(resumo, height=112, highlightthickness=0,
+                                 background=estilo.lookup("Card.TFrame", "background") or "#111925")
+        self.grafico.grid(row=5, column=0, columnspan=2, sticky="ew")
+        resumo.columnconfigure(0, weight=1)
+        resumo.columnconfigure(1, weight=1)
+        self.grafico.bind("<Configure>", lambda _: self._desenhar_grafico())
+        ttk.Label(resumo, textvariable=self.ultima_partida, style="Info.TLabel", wraplength=390).grid(
+            row=6, column=0, columnspan=2, sticky="w", pady=(3, 0))
+        ttk.Label(painel, text="Novos replays são verificados enquanto o Auto Farm estiver aberto.",
                   style="Info.TLabel", wraplength=400).pack(anchor="w", pady=(8, 0))
+        self._atualizar_historico()
+
+    def _atualizar_historico(self):
+        resumo = historico_baus.resumir(self.historico)
+        self.hoje.set(str(resumo["hoje"]))
+        melhor = resumo["melhor_dia"]
+        dia_melhor = f"{melhor[0][8:10]}/{melhor[0][5:7]}" if melhor else "—"
+        self.melhor_dia.set(f"{dia_melhor} · {melhor[1]}" if melhor else "—")
+        recorde = resumo["recorde_partida"]
+        media = resumo["media_partida"]
+        self.recorde.set("—" if recorde is None else str(recorde))
+        self.media.set("—" if media is None else f"{media:.1f}".replace(".", ","))
+        ultima = resumo["ultima_partida"]
+        self.ultima_partida.set("Última partida: —" if ultima is None else
+                                f"Última partida: você {ultima['voce'] if ultima['voce'] is not None else '—'} · "
+                                f"squad {ultima['esquadrao']}")
+        self._desenhar_grafico()
+
+    def _desenhar_grafico(self):
+        if not hasattr(self, "grafico") or not self.grafico.winfo_exists():
+            return
+        self.grafico.delete("all")
+        pontos = historico_baus.resumir(self.historico)["ultimos_7_dias"]
+        largura = max(280, self.grafico.winfo_width())
+        altura = max(90, self.grafico.winfo_height())
+        margem_x, margem_topo, margem_base = 12, 10, 22
+        base = altura - margem_base
+        maximo = max((valor for _, valor in pontos), default=0) or 1
+        estilo = ttk.Style()
+        cor = estilo.lookup("MetricaCard.TLabel", "foreground") or "#B8F36D"
+        passo = (largura - 2 * margem_x) / 7
+        for indice, (dia, valor) in enumerate(pontos):
+            x1 = margem_x + indice * passo + passo * 0.2
+            x2 = margem_x + (indice + 1) * passo - passo * 0.2
+            topo = base - (base - margem_topo) * valor / maximo if valor else base - 1
+            self.grafico.create_rectangle(x1, topo, x2, base, fill=cor, outline="")
+            self.grafico.create_text((x1 + x2) / 2, max(6, topo - 7), text=str(valor),
+                                     fill=cor, font=("Segoe UI", 8))
+            self.grafico.create_text((x1 + x2) / 2, altura - 9, text=dia[8:],
+                                     fill=estilo.lookup("Info.TLabel", "foreground") or "#A0AEC0",
+                                     font=("Segoe UI", 8))
 
     def abrir(self):
         self.deiconify()
@@ -57,7 +125,6 @@ class JanelaBaus(tk.Toplevel):
 
     def ocultar(self):
         self.aberta = False
-        self.cancelar_agendamento()
         self.withdraw()
 
     def cancelar_agendamento(self):
@@ -138,6 +205,17 @@ class JanelaBaus(tk.Toplevel):
             self.pedido_manual = None
             self.iniciar(caminho_pedido)
             return
+        if automatica and resultado is not None and assinatura is not None:
+            novo_historico, atualizado = historico_baus.registrar(
+                self.historico, caminho, assinatura, resultado)
+            if atualizado:
+                self.historico = novo_historico
+                try:
+                    historico_baus.salvar(self.historico)
+                except OSError:
+                    detalhe = (detalhe + " Histórico local não pôde ser salvo.") if detalhe else \
+                        "Histórico local não pôde ser salvo."
+                self._atualizar_historico()
         if detalhe is not None and (caminho is not None or not automatica or not self.arquivo.get()):
             self.arquivo.set(caminho.name if caminho else "")
             if resultado is not None:
@@ -145,5 +223,5 @@ class JanelaBaus(tk.Toplevel):
                 self.esquadrao.set("—" if resultado.esquadrao is None else str(resultado.esquadrao))
             if self.detalhe.get() != detalhe:
                 self.detalhe.set(detalhe)
-        if self.aberta:
-            self.agendamento = self.after(10_000, lambda: self.iniciar(automatica=True))
+        if self.winfo_exists():
+            self.agendamento = self.after(30_000, lambda: self.iniciar(automatica=True))

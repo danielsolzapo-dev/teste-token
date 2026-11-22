@@ -28,7 +28,7 @@ O anti-AFK mantém **W** nas caminhadas e alterna diagonais com **A** e **D**. C
 
 O tempo padrão é 7,5 minutos. A opção **Voltar ao lobby se só eu restar no esquadrão ou na partida** vem ligada e funciona mesmo com a saída por tempo desligada. Com o seu personagem vivo, o app procura os indicadores de eliminação de todos os companheiros reconhecidos ou o número **1** ao lado do ícone de jogadores restantes. Três leituras consecutivas, separadas por pelo menos um segundo, iniciam a volta ao lobby. Se os nomes ou as barras apenas sumirem, o app continua na partida e aguarda uma leitura conclusiva.
 
-**Próxima saída** mostra a contagem regressiva do prazo usado pela saída automática. O painel mostra um traço quando a automação está pausada ou não há saída programada. **Farmando** soma o tempo ativo desde que o app foi aberto, incluindo lobby e fila, e congela durante as pausas.
+**Próxima saída** mostra a contagem regressiva do prazo usado pela saída automática. O painel mostra um traço quando a automação está pausada ou não há saída programada. **Farmando** soma o tempo ativo desde que o app foi aberto, incluindo lobby e fila, e congela durante as pausas. O total de partidas é salvo neste PC. Em **Programação**, **Continuar o cronômetro Farmando ao reabrir** mantém o tempo acumulado entre aberturas; desligado, o tempo começa em zero na próxima abertura. **Pausar no lobby após** agenda uma pausa segura: ao atingir o prazo, o app aguarda reconhecer **Jogar** ou **Pronto** antes de parar.
 
 **Atualizar automaticamente** consulta as releases do GitHub ao abrir e a cada hora. Quando o app fica pausado, o atualizador valida o tamanho e o SHA-256 do executável, guarda a versão anterior como `.previous` e reinicia o app. Use **Verificar** para consultar manualmente.
 
@@ -44,7 +44,7 @@ Em **Regiões por horário**, ative a programação para Construção e Zero Bui
 
 ## Baús do replay
 
-Abra **Baús do replay** no rodapé. O painel lê a última gravação concluída de `%LOCALAPPDATA%\FortniteGame\Saved\Demos` e acompanha as próximas enquanto estiver aberto. Use **Escolher arquivo** para analisar outra partida. A leitura é local e funciona com a automação pausada.
+Abra **Baús do replay** no rodapé. O app lê a última gravação concluída de `%LOCALAPPDATA%\FortniteGame\Saved\Demos` e acompanha as próximas enquanto estiver aberto, mesmo com o painel de baús fechado. O histórico local mostra o total do esquadrão de hoje, o melhor dia, o recorde e a média por partida, além de um gráfico dos últimos sete dias. Use **Escolher arquivo** para analisar outra partida; arquivos selecionados manualmente não são contabilizados novamente no histórico. A leitura é local e funciona com a automação pausada.
 
 **Você** mostra as aberturas atribuídas ao jogador que gravou o replay. **Esquadrão (inclui você)** soma as aberturas desse jogador e dos colegas identificados na mesma equipe. O leitor verifica a interação de abertura e quem a realizou. Ele exclui adversários, caixas de munição e baús apenas destruídos. O painel informa quando faltou autoria ou cobertura. Uma gravação local pode omitir ações de colegas distantes.
 
@@ -101,7 +101,7 @@ Inicie, teste e compile:
 ```powershell
 py -3.14 app.py
 py -3.14 -m unittest discover -s tests -v
-py -3.14 -m py_compile app.py atualizador.py diagnostico.py embarque.py logica_autofarm.py painel_tema.py regiao.py relogio_painel.py tesouros.py texto_tela.py webhook.py windows_game.py
+py -3.14 -m py_compile app.py atualizador.py diagnostico.py embarque.py estado_local.py historico_baus.py logica_autofarm.py painel_replay.py painel_tema.py regiao.py relogio_painel.py tesouros.py texto_tela.py webhook.py windows_game.py
 py -3.14 app.py --verificar-build
 py -3.14 -m PyInstaller --noconfirm --onefile --windowed --name AutoFarmTokenPirata --collect-all rapidocr --copy-metadata rapidocr --add-data "modelos;modelos" --add-data "templates;templates" --add-data "fontes;fontes" --add-data "leitor_replay/binario;leitor_replay/binario" app.py
 py -3.14 -m PyInstaller --noconfirm --onefile --windowed --name EmissorLicencas emissor.py

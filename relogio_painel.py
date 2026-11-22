@@ -10,10 +10,10 @@ def _formatar(segundos):
 
 
 class RelogioPainel:
-    def __init__(self):
+    def __init__(self, acumulado=0):
         self._inicio = None
-        self._acumulado = 0.0
-        self._ja_iniciou = False
+        self._acumulado = max(0.0, float(acumulado))
+        self._ja_iniciou = self._acumulado > 0
         self.prazo_saida = None
 
     def iniciar(self, agora):
@@ -28,8 +28,12 @@ class RelogioPainel:
 
     def valores(self, agora):
         ativo = self._inicio is not None
-        farm = self._acumulado
-        if ativo:
-            farm += max(0.0, agora - self._inicio)
+        farm = self.segundos_farmando(agora)
         saida = _formatar(math.ceil(self.prazo_saida - agora)) if ativo and self.prazo_saida is not None else "—"
         return saida, _formatar(int(farm)) if self._ja_iniciou else "—"
+
+    def segundos_farmando(self, agora):
+        farm = self._acumulado
+        if self._inicio is not None:
+            farm += max(0.0, agora - self._inicio)
+        return farm
