@@ -81,8 +81,12 @@ def _terreno(imagem):
 
 def recortar_minimapa(quadro):
     h, w = quadro.shape[:2]
-    lado, margem = round(h / 6), round(h / 45)
-    return quadro[margem:margem + lado, w - margem - lado:w - margem]
+    # O HUD do Fortnite usa um minimapa maior que h/6 (por exemplo, ~194 px
+    # em 1440x900). Ancora pela borda superior e direita, que são estáveis.
+    lado = round(h * .215)
+    margem_x, margem_y = round(w * .0153), round(h * .0256)
+    lado = min(lado, h - margem_y, w - margem_x)
+    return quadro[margem_y:margem_y + lado, w - margem_x - lado:w - margem_x]
 
 
 class Localizador:
@@ -93,12 +97,15 @@ class Localizador:
         self.detalhe = _terreno(ilha)
         self.atlas = cv2.resize(self.detalhe, (376, 360), interpolation=cv2.INTER_AREA)
         self.anterior = None
+        self.ultima_confianca = 0.
+        self.ultima_margem = 0.
 
     def localizar(self, quadro):
         mini = recortar_minimapa(quadro)
         if mini.size == 0:
             return None
         amostra = _terreno(cv2.resize(mini, (120, 120), interpolation=cv2.INTER_AREA))
+        self.ultima_confianca = self.ultima_margem = 0.
         if amostra.std(axis=(0, 1)).max() < .10:
             self.anterior = None
             return None
@@ -131,6 +138,8 @@ class Localizador:
         raio = max(15, melhor.lado * .17)
         segunda = max((p.confianca for p in candidatos if np.hypot(p.x - melhor.x, p.y - melhor.y) > raio),
                       default=0.)
+        self.ultima_confianca = melhor.confianca
+        self.ultima_margem = melhor.confianca - segunda
         if melhor.confianca >= .78 and melhor.confianca - segunda >= .035:
             self.anterior = self._refinar(amostra, melhor)
         return self.anterior

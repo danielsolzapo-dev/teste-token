@@ -239,6 +239,9 @@ def monitorar(windows, fluxo, eventos, parar, diagnostico=None, *, lobby=None):
                         rota_sem_posicao_desde = agora
                     elif agora - rota_sem_posicao_desde >= 6 and not captura_falha_rota:
                         salvar_captura_diagnostico(quadro, diagnostico, "rota_sem_posicao", "rota_ultimo_minimapa.jpg")
+                        from mapa_rota import recortar_minimapa
+                        salvar_captura_diagnostico(recortar_minimapa(quadro), diagnostico,
+                                                  "rota_captura_minimapa", "rota_minimapa_atual.jpg")
                         captura_falha_rota = True
                 else:
                     rota_sem_posicao_desde, captura_falha_rota = None, False
@@ -289,7 +292,9 @@ def monitorar(windows, fluxo, eventos, parar, diagnostico=None, *, lobby=None):
                                               ponto=rota.indice + 1 if rota.fase != "concluida" else None,
                                               busca_local=rota.subponto,
                                               estado=rota.status, posicao=[pos.x, pos.y] if pos else None,
-                                              confianca=round(pos.confianca, 3) if pos else None)
+                                              confianca=round(pos.confianca, 3) if pos else None,
+                                              score_mapa=round(rota.mapa.ultima_confianca, 3),
+                                              margem_mapa=round(rota.mapa.ultima_margem, 3))
                     diagnostico.registrar("leitura", foco=not em_fundo, segundo_plano=em_fundo,
                                           hud=hud_visivel, partida=partida,
                                           cursor=cursor, onibus=onibus, asa_delta=asa_delta,

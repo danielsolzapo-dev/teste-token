@@ -72,7 +72,7 @@ class RotaBaus:
                 self.pos = nova
         if self.pos is None:
             self.giro = None
-            self.status = "Rota · localizando o personagem no minimapa"
+            self.status = "Rota · aguardando correspondência confiável do minimapa"
         return self.pos
 
     def no_onibus(self, quadro, agora):
@@ -249,6 +249,13 @@ class RotaBaus:
         if self.fase == "concluida" or agora < self.proxima:
             return None
         self.proxima = agora + .35
+        # A leitura da posição pode falhar por alguns quadros, mas a transição
+        # do ônibus para o voo depende do detector de estado, não do minimapa.
+        if self.fase == "aguardando" and asa:
+            self.fase, self.ultimo_aereo = "voo", agora
+        elif (self.fase == "onibus" and self.ultimo_onibus is not None
+              and agora - self.ultimo_onibus >= .8):
+            self.fase, self.ultimo_aereo = "voo", agora
         pos = self._localizar(quadro, agora)
         if pos is None:
             self.tecla_vista, self.leituras_tecla = None, 0
@@ -265,10 +272,6 @@ class RotaBaus:
                 self.status = "Rota armada · aguardando o ônibus"
                 self.proxima = agora + 1
                 return None
-        if self.fase == "onibus":
-            if agora - self.ultimo_onibus < .8:
-                return None
-            self.fase, self.ultimo_aereo = "voo", agora
         if self.fase == "voo":
             if asa:
                 self.abrir_asa = False

@@ -23,10 +23,11 @@ class LeituraRotaTest(unittest.TestCase):
                                   (1080, 1920, 545, 282, 164), (900, 1440, 398, 303, 140)):
             with self.subTest(h=h, x=x):
                 f = np.zeros((h, w, 3), np.uint8)
-                margem, s = round(h/45), round(h/6)
+                s = round(h*.215)
+                margem_x, margem_y = round(w*.0153), round(h*.0256)
                 mini = cv2.resize(atlas[y-lado//2:y+lado//2, x-lado//2:x+lado//2], (s, s))
                 cv2.drawMarker(mini, (s//2, s//2), (255, 255, 255), cv2.MARKER_CROSS, 7, 1)
-                f[margem:margem+s, w-margem-s:w-margem] = mini
+                f[margem_y:margem_y+s, w-margem_x-s:w-margem_x] = mini
                 loc = Localizador()
                 for _ in range(2):
                     p = loc.localizar(f)
