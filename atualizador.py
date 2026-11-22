@@ -17,7 +17,7 @@ from urllib.request import Request, urlopen
 
 
 DONO = "danielsolzapo-dev"
-REPOSITORIO = "Token"
+REPOSITORIO = "teste-token"
 NOME_EXECUTAVEL = "AutoFarmTokenPirata.exe"
 URL_API = f"https://api.github.com/repos/{DONO}/{REPOSITORIO}/releases/latest"
 TAMANHO_MAXIMO = 500 * 1024 * 1024

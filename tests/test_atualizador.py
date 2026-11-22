@@ -67,7 +67,7 @@ class AtualizadorTest(unittest.TestCase):
         )
         self.assertEqual(release.versao, "2.0.7")
         self.assertEqual(release.sha256, digest)
-        self.assertEqual(release.pagina, "https://github.com/danielsolzapo-dev/Token/releases/tag/v2.0.7")
+        self.assertEqual(release.pagina, "https://github.com/danielsolzapo-dev/teste-token/releases/tag/v2.0.7")
 
     def test_nao_oferece_mesma_versao(self):
         resposta = json.dumps(release_json("2.0.6", b"x", sha256(b"x").hexdigest())).encode()
@@ -104,9 +104,9 @@ class AtualizadorTest(unittest.TestCase):
         arquivo = b"portable-app-bytes"
         release = Release(
             "2.0.7", "v2.0.7",
-            "https://github.com/danielsolzapo-dev/Token/releases/download/v2.0.7/"
+            "https://github.com/danielsolzapo-dev/teste-token/releases/download/v2.0.7/"
             "AutoFarmTokenPirata.exe",
-            sha256(arquivo).hexdigest(), len(arquivo), "https://github.com/danielsolzapo-dev/Token/releases/tag/v2.0.7",
+            sha256(arquivo).hexdigest(), len(arquivo), "https://github.com/danielsolzapo-dev/teste-token/releases/tag/v2.0.7",
         )
         with tempfile.TemporaryDirectory() as diretorio:
             caminho = atualizador.baixar_atualizacao(
@@ -121,7 +121,7 @@ class AtualizadorTest(unittest.TestCase):
         arquivo = b"tampered"
         release = Release(
             "2.0.7", "v2.0.7",
-            "https://github.com/danielsolzapo-dev/Token/releases/download/v2.0.7/"
+            "https://github.com/danielsolzapo-dev/teste-token/releases/download/v2.0.7/"
             "AutoFarmTokenPirata.exe",
             sha256(b"expected").hexdigest(), len(arquivo), "",
         )
