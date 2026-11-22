@@ -59,6 +59,16 @@ O registro fica em `%LOCALAPPDATA%\AutoFarmToken\diagnostico.log`, com até duas
 
 Os ajustes ficam em `%LOCALAPPDATA%\AutoFarmToken\ajustes.json`. A detecção depende da resolução, escala e idioma da interface do jogo e pode precisar de ajustes após atualizações do Fortnite. Confirme se automação de entradas é permitida pelas regras do jogo; não use o aplicativo se isso violar as regras ou políticas aplicáveis.
 
+## Rota de baús da ponta leste
+
+Em **Automação**, marque **Pousar na ponta leste e seguir a rota dos baús**. Use **Ver rota** para conferir o ponto de pouso e o trajeto. A opção começa desligada. Ao ativá-la, ela controla o salto, a asa-delta e a caminhada daquela sessão.
+
+O app compara o minimapa visível com a ilha de referência e lê a direção na bússola. Ele espera a aproximação do ônibus, salta com Espaço e corrige o voo em direção à ponta de areia a leste de Lil’ Uzi’s Stronghold. Depois do pouso, segue a praia norte, contorna a enseada por terra e visita a construção da praia sul. Os três pontos numerados são locais de procura. A disponibilidade dos baús varia por partida.
+
+No percurso, o app aguarda o comando de vasculhar na mira, lê a tecla de interação e a mantém pressionada. Usa **E** quando o comando está legível e a letra não aparece separadamente. A contagem de aberturas confirmadas continua em **Baús do replay**. **F6** pausa a rota. A saída por tempo e a saída por último sobrevivente continuam com prioridade.
+
+Com a rota habilitada, **Testar imagem** mostra a posição estimada e o rumo de uma captura com o minimapa do jogo. A navegação aguarda uma leitura confiável se o mapa estiver encoberto, se a câmera não responder ou se a ilha mudar.
+
 ## Emissão de licenças
 
 1. No Windows do vendedor, abra o [Emissor de Licenças](https://github.com/danielsolzapo-dev/Token/releases/latest/download/EmissorLicencas.exe). Na primeira utilização, use **Exportar backup**, escolha uma senha de pelo menos 12 caracteres e guarde o arquivo `.pem` em local separado do PC. Guarde também a senha em lugar seguro.
