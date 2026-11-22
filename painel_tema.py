@@ -18,7 +18,6 @@ APARENCIAS = {
     "floresta": "Floresta (Verde escuro)",
     "roxo": "Pôr do sol (Roxo)",
     "abobora": "Abóbora (Halloween)",
-    "neon": "Neon (Ciano e violeta)",
 }
 
 
@@ -55,8 +54,6 @@ PALETAS = {
                    "#F5EBFC", "#C9ADD9", "#70458D", "#FFFFFF", "#352047", "#D1A8EF", "#D1A8EF", "#1B1029"),
     "abobora": Paleta("#101010", "#1A1713", "#62401C", "#FFF0DF", "#C9A781", "#101010",
                    "#F59A32", "#C9A781", "#F59A32", "#090909", "#1A1713", "#F59A32", "#F59A32", "#090909"),
-    "neon": Paleta("#070B18", "#10172A", "#293653", "#EDF3FF", "#9EACCA", "#0B1020",
-                   "#F2F5FF", "#AAB8D6", "#6538C8", "#FFFFFF", "#151D33", "#35DDF4", "#9B62FF", "#0A1122"),
 }
 
 
