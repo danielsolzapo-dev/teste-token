@@ -2,7 +2,7 @@
 
 Aplicativo desktop independente para Windows x64. Usa capturas da tela, imagens de referência locais e OCR para reconhecer estados visíveis do Fortnite; não lê memória do jogo, injeta DLLs nem tenta ocultar entradas do anti-cheat.
 
-[Baixar AutoFarmTokenPirata.exe para Windows](https://github.com/danielsolzapo-dev/Token/releases/latest/download/AutoFarmTokenPirata.exe)
+[Releases de teste do Auto Farm](https://github.com/danielsolzapo-dev/teste-token/releases)
 
 ## Uso
 
@@ -71,9 +71,11 @@ Com a rota habilitada, **Testar imagem** mostra a posição estimada e o rumo de
 
 ## Emissão de licenças
 
-1. No Windows do vendedor, abra o [Emissor de Licenças](https://github.com/danielsolzapo-dev/Token/releases/latest/download/EmissorLicencas.exe). Na primeira utilização, use **Exportar backup**, escolha uma senha de pelo menos 12 caracteres e guarde o arquivo `.pem` em local separado do PC. Guarde também a senha em lugar seguro.
+1. No Windows do vendedor, abra o [Emissor de Licenças](https://github.com/danielsolzapo-dev/teste-token/releases/latest/download/EmissorLicencas.exe). Na primeira utilização, use **Exportar backup**, escolha uma senha de pelo menos 12 caracteres e guarde o arquivo `.pem` em local separado do PC. Guarde também a senha em lugar seguro.
 2. Escolha a validade e clique em **Gerar chave de venda**. Cada clique gera uma chave nova. Copie e entregue a chave ao comprador por mensagem privada. Até o primeiro uso, quem tiver a chave pode ativá-la.
 3. O comprador ativa a chave no PC em que vai usar o app. O servidor registra uma única máquina por chave, inclusive quando dois PCs tentam ativá-la ao mesmo tempo. O prazo começa no dia da primeira ativação e inclui o último dia, pelo horário de Brasília. Repetir a ativação no mesmo Windows recupera o comprovante com o vencimento original.
+
+Esta cópia é para testes. Use somente chaves de teste e evite distribuir os executáveis destas releases. O app de cliente continuará no repositório comercial até a migração que você solicitar.
 
 Com o servidor privado, o comprador pode ativar pelo Discord. Também existe emissão offline por código do PC, com prazo contado a partir da emissão. A reinstalação do Windows pode alterar o identificador e exigir uma nova licença.
 
@@ -89,7 +91,7 @@ O botão consulta o mesmo registro da ativação direta. Repetir o formulário n
 
 ### Bot no Windows do vendedor
 
-Abra o [Bot de Ativação para Discord](https://github.com/danielsolzapo-dev/Token/releases/latest/download/BotAtivacaoDiscord.exe) no Windows que vai atender os pedidos. Na primeira abertura, informe o token do bot e a credencial do serviço de ativação privado. Os dois ficam no Gerenciador de Credenciais do seu usuário do Windows. Para substituí-los, execute o bot com `--configurar`. O bot precisa estar aberto e conectado à internet para atender uma nova ativação.
+Abra o [Bot de Ativação para Discord](https://github.com/danielsolzapo-dev/teste-token/releases/latest/download/BotAtivacaoDiscord.exe) no Windows que vai atender os pedidos. Na primeira abertura, informe o token do bot e a credencial do serviço de ativação privado. Os dois ficam no Gerenciador de Credenciais do seu usuário do Windows. Para substituí-los, execute o bot com `--configurar`. O bot precisa estar aberto e conectado à internet para atender uma nova ativação.
 
 Instale o bot no servidor como aplicativo de servidor com as permissões **Ver canal**, **Enviar mensagens**, **Anexar arquivos** e **Ler histórico de mensagens**. O bot publica o botão em **#sukinha**, no servidor **Teste**, quando o dono do bot também é dono do servidor e o destino é único. Para indicar o destino explicitamente, copie o link do canal no Discord e abra `BotAtivacaoDiscord.exe --canal "LINK_DO_CANAL"`. O bot guarda os IDs do canal e do painel para reutilizar o mesmo botão após reiniciar. [Portal de Desenvolvedores do Discord](https://discord.com/developers/applications)
 
