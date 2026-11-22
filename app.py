@@ -606,6 +606,10 @@ class Painel:
             self.salvamento.submit(self.diagnostico.registrar, evento, **dados)
 
     def _salvar_estado_local(self):
+        # Alguns testes unitários constroem Painel parcialmente com object.__new__.
+        # O painel real sempre inicializa esses campos no __init__.
+        if not all(hasattr(self, nome) for nome in ("partidas_base", "partidas_sessao", "relogio", "config")):
+            return
         estado = {
             "partidas": self.partidas_base + self.partidas_sessao,
             "farmando_segundos": (round(self.relogio.segundos_farmando(time.monotonic()))
