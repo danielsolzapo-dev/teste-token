@@ -655,18 +655,19 @@ class Painel:
         cor = self.tema.paleta
         self.viewport.configure(background=cor.fundo)
         self.janela.configure(background=cor.fundo)
-        self.janela.minsize(540, 345)
-        altura = min(900, int(self.janela.winfo_screenheight() * 0.9))
-        self.janela.geometry(f"620x{altura}")
+        largura = min(1160, max(940, int(self.janela.winfo_screenwidth() * 0.88)))
+        altura = min(760, max(640, int(self.janela.winfo_screenheight() * 0.88)))
+        self.janela.minsize(900, 620)
+        self.janela.geometry(f"{largura}x{altura}")
         ajustar_titulo(self.janela, aparencia != "rosa")
-        self.conteudo = ttk.Frame(self.viewport)
+        self.conteudo = ttk.Frame(self.viewport, padding=(16, 14, 16, 16))
         self._medidas_viewport = None
         self.janela_conteudo = self.viewport.create_window(0, 0, anchor="nw", window=self.conteudo)
         self.conteudo.bind("<Configure>", self._dimensionar_conteudo)
-        resumo = ttk.Frame(self.conteudo, style="Lateral.TFrame", padding=(24, 18, 24, 0))
-        operacoes = ttk.Frame(self.conteudo, padding=(24, 12, 24, 20))
+        resumo = ttk.Frame(self.conteudo, style="Lateral.TFrame", padding=(18, 14))
+        operacoes = ttk.Frame(self.conteudo, padding=(0, 12, 0, 0))
         resumo.pack(fill="x")
-        operacoes.pack(fill="x")
+        operacoes.pack(fill="both", expand=True)
         self._montar_sessao(resumo)
         self._montar_controles(operacoes)
         for nome, (texto, desativado) in estados.items():
@@ -678,28 +679,32 @@ class Painel:
         self.viewport.yview_moveto(0)
 
     def _montar_sessao(self, resumo):
-        alinhamento = "w"
-        ttk.Label(resumo, text="Auto Farm", style="Titulo.TLabel").pack(anchor=alinhamento)
-        validade = f"Licença até {self.expira:%d/%m/%Y}" if self.expira else "Licença vitalícia"
-        ttk.Label(resumo, text=f"v{VERSAO} · {validade}", style="LateralInfo.TLabel").pack(anchor=alinhamento)
+        resumo.columnconfigure(0, weight=1)
+        resumo.columnconfigure(1, weight=0)
+        cabecalho = ttk.Frame(resumo, style="Lateral.TFrame")
+        cabecalho.grid(row=0, column=0, columnspan=2, sticky="ew")
+        ttk.Label(cabecalho, text="Auto Farm", style="Titulo.TLabel").pack(side="left")
+        validade = f"v{VERSAO}  ·  Licença até {self.expira:%d/%m/%Y}" if self.expira else f"v{VERSAO}  ·  Licença vitalícia"
+        ttk.Label(cabecalho, text=validade, style="LateralInfo.TLabel").pack(side="left", padx=(12, 0), pady=(5, 0))
         ttk.Label(resumo, text="Fortnite · Fila, saída por tempo e movimento",
-                  style="LateralInfo.TLabel").pack(anchor=alinhamento, pady=(3, 12))
-        ttk.Label(resumo, text="Aparência", style="LateralInfo.TLabel").pack(anchor=alinhamento, pady=(0, 3))
-        seletor = ttk.Combobox(resumo, state="readonly", values=tuple(APARENCIAS.values()),
-                              textvariable=self.aparencia, width=28)
-        seletor.pack(fill="x", pady=(0, 14))
+                  style="LateralInfo.TLabel").grid(row=1, column=0, sticky="w", pady=(2, 8))
+        aparencia = ttk.Frame(resumo, style="Lateral.TFrame")
+        aparencia.grid(row=0, column=1, rowspan=2, sticky="e", padx=(16, 0))
+        ttk.Label(aparencia, text="Aparência", style="LateralInfo.TLabel").pack(anchor="w", pady=(0, 3))
+        seletor = ttk.Combobox(aparencia, state="readonly", values=tuple(APARENCIAS.values()),
+                               textvariable=self.aparencia, width=25)
+        seletor.pack()
         seletor.bind("<<ComboboxSelected>>", self.trocar_aparencia)
-        estado = ttk.Frame(resumo, style="Lateral.TFrame")
-        estado.pack(anchor=alinhamento)
-        self.icone_estado = ttk.Label(estado, style="Lateral.TLabel")
-        self.icone_estado.pack(side="left", padx=(0, 6))
-        self.rotulo_estado = ttk.Label(estado, textvariable=self.status, style="Estado.TLabel",
-                                      wraplength=480)
+        linha_estado = ttk.Frame(resumo, style="Lateral.TFrame")
+        linha_estado.grid(row=2, column=0, columnspan=2, sticky="ew", pady=(0, 9))
+        self.icone_estado = ttk.Label(linha_estado, style="Lateral.TLabel")
+        self.icone_estado.pack(side="left", padx=(0, 7))
+        self.rotulo_estado = ttk.Label(linha_estado, textvariable=self.status, style="Estado.TLabel")
         self.rotulo_estado.pack(side="left")
-        ttk.Label(resumo, textvariable=self.atividade, style="LateralInfo.TLabel",
-                  wraplength=480, justify="left").pack(anchor=alinhamento, pady=(3, 12))
+        ttk.Label(linha_estado, textvariable=self.atividade, style="LateralInfo.TLabel",
+                  wraplength=560).pack(side="left", padx=(12, 0))
         linha = ttk.Frame(resumo, style="Lateral.TFrame")
-        linha.pack(fill="x")
+        linha.grid(row=3, column=0, columnspan=2, sticky="ew")
         for coluna, (nome, valor) in enumerate((("Partidas", self.total),
                                                ("Próxima saída", self.proxima_saida),
                                                ("Farmando", self.farmando))):
@@ -714,24 +719,21 @@ class Painel:
         return area
 
     def _montar_controles(self, painel):
-        automacao = ttk.Frame(painel, style="Card.TFrame", padding=(13, 10))
-        automacao.pack(fill="x", pady=(0, 9))
-        ttk.Label(automacao, text="Automação", style="Secao.TLabel").pack(anchor="w", pady=(0, 4))
+        painel.columnconfigure(0, weight=3, uniform="colunas")
+        painel.columnconfigure(1, weight=2, uniform="colunas")
+        automacao = ttk.Frame(painel, style="Card.TFrame", padding=(15, 12))
+        automacao.grid(row=0, column=0, rowspan=3, sticky="nsew", padx=(0, 10))
+        ttk.Label(automacao, text="Automação", style="Secao.TLabel").pack(anchor="w", pady=(0, 7))
         for nome, texto in (
             ("clicar_continuar", "Clicar em Continuar após a eliminação"),
             ("fallback_cor", "Procurar Jogar Novamente pela cor"),
             ("anti_afk", "Ativar movimento anti-AFK"),
             ("rotina_aerea", "Saltar e fechar a asa-delta com Espaço"),
             ("sair_por_tempo", "Voltar ao lobby após o tempo da partida"),
-            ("sair_quando_sozinho", "Voltar ao lobby se só eu restar no esquadrão ou na partida"),
-            ("segundo_plano", "Executar em segundo plano (experimental)"),
-            ("cursor_segundo_plano", "Permitir mover o cursor nos cliques em segundo plano"),
         ):
-            linha_opcao = automacao
-            comando = self.salvar_saida_quando_sozinho if nome == "sair_quando_sozinho" else None
-            ttk.Checkbutton(linha_opcao, text=texto, variable=self.opcoes[nome], style=self.tema.switch,
-                            command=comando).pack(fill="x")
-        ttk.Frame(automacao, style="Separador.TFrame").pack(fill="x", pady=6)
+            ttk.Checkbutton(automacao, text=texto, variable=self.opcoes[nome],
+                            style=self.tema.switch).pack(fill="x", pady=2)
+        ttk.Frame(automacao, style="Separador.TFrame").pack(fill="x", pady=9)
         campo = ttk.Frame(automacao, style="CardInterior.TFrame")
         campo.pack(fill="x")
         ttk.Label(campo, text="Minutos por partida", style="Card.TLabel").pack(side="left", padx=(0, 10))
@@ -739,13 +741,22 @@ class Painel:
         ttk.Spinbox(campo, textvariable=self.minutos, values=minutos, width=8).pack(side="left", padx=(0, 8))
         ttk.Label(campo, text="1–60 min", style="CardInfo.TLabel").pack(side="left")
 
-        programacao = ttk.Frame(painel, style="Card.TFrame", padding=(13, 10))
-        programacao.pack(fill="x", pady=(0, 9))
-        ttk.Label(programacao, text="Programação", style="Secao.TLabel").pack(anchor="w", pady=(0, 4))
-        ttk.Checkbutton(programacao, text="Continuar o cronômetro Farmando ao reabrir",
+        extras = ttk.Frame(painel, style="Card.TFrame", padding=(13, 10))
+        extras.grid(row=1, column=1, sticky="ew", pady=(9, 0))
+        ttk.Label(extras, text="Mais configurações", style="Secao.TLabel").pack(anchor="w", pady=(0, 4))
+        for nome, texto in (
+            ("sair_quando_sozinho", "Voltar ao lobby se só eu restar no esquadrão ou na partida"),
+            ("segundo_plano", "Executar em segundo plano (experimental)"),
+            ("cursor_segundo_plano", "Permitir mover o cursor nos cliques em segundo plano"),
+        ):
+            comando = self.salvar_saida_quando_sozinho if nome == "sair_quando_sozinho" else None
+            ttk.Checkbutton(extras, text=texto, variable=self.opcoes[nome], style=self.tema.switch,
+                            command=comando).pack(fill="x", pady=1)
+        ttk.Frame(extras, style="Separador.TFrame").pack(fill="x", pady=6)
+        ttk.Checkbutton(extras, text="Continuar o cronômetro Farmando ao reabrir",
                         variable=self.opcoes["continuar_farmando"], command=self.salvar_preferencia_cronometro,
                         style=self.tema.switch).pack(fill="x")
-        linha_pausa = ttk.Frame(programacao, style="CardInterior.TFrame")
+        linha_pausa = ttk.Frame(extras, style="CardInterior.TFrame")
         linha_pausa.pack(fill="x", pady=(4, 0))
         ttk.Checkbutton(linha_pausa, text="Pausar no lobby após", variable=self.opcoes["pausar_programado"],
                         command=self.salvar_preferencia_programacao,
@@ -756,18 +767,21 @@ class Painel:
         campo_pausa.bind("<Return>", lambda _: self.salvar_preferencia_programacao())
         ttk.Label(linha_pausa, text="min", style="CardInfo.TLabel").pack(side="left")
 
-        self.botao = self.botao_com_icone(painel, "Iniciar", "play", self.alternar, principal=True)
-        self.botao.pack(fill="x", pady=(0, 8))
-        ferramentas = ttk.Frame(painel)
+        acoes = ttk.Frame(painel, style="Card.TFrame", padding=(13, 10))
+        acoes.grid(row=0, column=1, sticky="ew")
+        self.botao = self.botao_com_icone(acoes, "Iniciar", "play", self.alternar, principal=True)
+        self.botao.pack(fill="x", pady=(0, 7))
+        ferramentas = ttk.Frame(acoes, style="CardInterior.TFrame")
         ferramentas.pack(fill="x")
         self.botao_testar = self.botao_com_icone(ferramentas, "Testar imagem", "imagem", self.testar)
-        self.botao_diagnostico = self.botao_com_icone(ferramentas, "Copiar diagnóstico", "diagnostico", self.copiar_diagnostico)
+        self.botao_diagnostico = self.botao_com_icone(
+            ferramentas, "Copiar diagnóstico", "diagnostico", self.copiar_diagnostico)
         self._alinhar_botoes(ferramentas, self.botao_testar, self.botao_diagnostico)
-        ttk.Label(painel, text="F6 inicia ou pausa\nF7 marca uma falha no diagnóstico durante a sessão",
-                  style="Info.TLabel", wraplength=480).pack(anchor="w", pady=(6, 12))
+        ttk.Label(acoes, text="F6 inicia ou pausa  ·  F7 marca uma falha no diagnóstico",
+                  style="Info.TLabel", wraplength=480).pack(anchor="w", pady=(7, 0))
 
-        atualizacao = ttk.Frame(painel, style="Card.TFrame", padding=(13, 10))
-        atualizacao.pack(fill="x")
+        atualizacao = ttk.Frame(painel, style="Card.TFrame", padding=(13, 9))
+        atualizacao.grid(row=2, column=1, sticky="ew", pady=(9, 0))
         ttk.Label(atualizacao, text="Atualizações", style="Secao.TLabel").pack(anchor="w")
         linha = ttk.Frame(atualizacao, style="CardInterior.TFrame")
         linha.pack(fill="x", pady=(4, 0))
@@ -775,18 +789,21 @@ class Painel:
         self.botao_atualizacao.pack(side="right")
         ttk.Checkbutton(linha, text="Atualizar automaticamente", variable=self.opcoes["atualizar_auto"],
                         command=self.salvar_preferencia_atualizacao, style=self.tema.switch).pack(
-                            side="left", fill="x", expand=True, padx=(0, 12))
+                            side="left", fill="x", expand=True, padx=(0, 8))
         ttk.Label(atualizacao, textvariable=self.status_atualizacao, style="CardInfo.TLabel",
-                  wraplength=365).pack(anchor="w", pady=(3, 0))
+                  wraplength=380).pack(anchor="w", pady=(3, 0))
+
         rodape = ttk.Frame(painel)
-        rodape.pack(fill="x", pady=(9, 0))
-        self._alinhar_botoes(rodape,
-                           self.botao_com_icone(rodape, "Recompensas e webhook", "presente", self.mostrar_webhook),
-                           self.botao_com_icone(rodape, "Regiões por horário", "relogio", self.mostrar_regiao))
-        ttk.Label(rodape, textvariable=self.status_webhook, style="Info.TLabel",
-                  wraplength=180).grid(row=1, column=0, sticky="w", pady=(5, 0))
+        rodape.grid(row=3, column=0, columnspan=2, sticky="ew", pady=(10, 0))
+        rodape.columnconfigure((0, 1, 2), weight=1, uniform="rodape")
+        ttk.Button(rodape, text="Recompensas e webhook", command=self.mostrar_webhook).grid(
+            row=0, column=0, sticky="ew", padx=(0, 6))
+        ttk.Button(rodape, text="Regiões por horário", command=self.mostrar_regiao).grid(
+            row=0, column=1, sticky="ew", padx=3)
         ttk.Button(rodape, text="Baús do replay", command=self.mostrar_baus_replay).grid(
-            row=1, column=1, sticky="ew", pady=(5, 0))
+            row=0, column=2, sticky="ew", padx=(6, 0))
+        ttk.Label(rodape, textvariable=self.status_webhook, style="Info.TLabel").grid(
+            row=1, column=0, columnspan=3, sticky="w", pady=(5, 0))
 
     @staticmethod
     def _alinhar_botoes(pai, *botoes):
