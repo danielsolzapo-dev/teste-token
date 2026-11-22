@@ -75,7 +75,6 @@ class Config:
     aparencia: str = "azul"
     pausar_ao_obter_token: bool = False
     sair_quando_sozinho: bool = True
-    rota_baus: bool = False
 
 
 @dataclass(frozen=True)
@@ -644,13 +643,10 @@ class Fluxo:
         self.partidas = 0
         self.sobreviventes = Sobreviventes()
         self.regiao = RegiaoLobby()
-        self.rota = None
         self.reconhecer_retorno_ao_lobby()
 
     def reconhecer_retorno_ao_lobby(self):
         """Um aviso de lobby confirmado encerra as ações pendentes da partida anterior."""
-        if self.rota is not None:
-            self.rota.reiniciar()
         self.sobreviventes.reiniciar()
         if self.regiao.alvo is not None:
             self.regiao = RegiaoLobby()
@@ -710,8 +706,6 @@ class Fluxo:
         self._quadros_hud_afk = 0
         self._ultimo_hud_em_partida = None
         self.embarque.pausar()
-        if self.rota is not None:
-            self.rota.pausar()
 
     def _iniciar_partida(self, agora):
         self.sobreviventes.reiniciar()
@@ -816,8 +810,6 @@ class Fluxo:
             self._movimento_exige_transicao = True
             self._onibus_visivel_no_clique = no_onibus
             self.embarque.reiniciar()
-            if self.rota is not None:
-                self.rota.reiniciar()
             self._botoes_fila_clicados.add(self._pendente)
             self._transicao_hud = False
             self._quadros_sem_hud = 0
@@ -955,17 +947,6 @@ class Fluxo:
         self.motivo_anti_afk = "movimento_aereo"
         return Acao("movimento_aereo", passos=(("teclas", codigos, 0.8),))
 
-    def _seguir_rota(self, quadro, agora, *, onibus=False, hud=False, asa=False):
-        if self.rota is None:
-            from rota_baus import RotaBaus
-            self.rota = RotaBaus()
-        self.motivo_anti_afk = "rota_baus"
-        if onibus:
-            ordem = self.rota.no_onibus(quadro, agora)
-        else:
-            ordem = self.rota.fora_do_onibus(quadro, self.detector._carregar_leitor(), agora, hud=hud, asa=asa)
-        return Acao(ordem.tipo, passos=ordem.passos) if ordem else None
-
     @staticmethod
     def _acao_regiao(ordem, alvo):
         if ordem is None:
@@ -989,8 +970,6 @@ class Fluxo:
             self.pausar()
             return None
         hud_visivel = partida if hud_visivel is None else hud_visivel
-        if self.rota is not None and not self.config.rota_baus:
-            self.rota = None
         sem_controle = espectando or derrubado
         observar_sobreviventes = (self.config.sair_quando_sozinho and partida and hud_visivel
                                   and not (sem_controle or no_onibus or asa_delta or self.navegando_menu
@@ -1024,18 +1003,13 @@ class Fluxo:
         onibus_novo = no_onibus and (not self._onibus_visivel_no_clique or self._transicao_hud)
         saiu_do_onibus = self.embarque.saltou_em is not None and not no_onibus
         descendo = saiu_do_onibus and self.embarque.em_transicao(agora)
-        controle_aereo = (descendo and self.config.rotina_aerea and not self.config.rota_baus
+        controle_aereo = (descendo and self.config.rotina_aerea
                           and self.config.anti_afk and not cursor and not sem_controle
                           and self._prazo_menu is None and self._prazo_lobby is None)
         aereo_autorizado = onibus_novo or asa_delta or self.embarque.saltou_em is not None
         replay_na_tela = ((no_onibus or asa_delta) and self._pendente is None and self._prazo_fila is None
                           and self._procurar(quadro, "jogar", "continuar"))
-        pode_rota = self.config.rota_baus and not (sem_controle or replay_na_tela or self.navegando_menu)
-        if pode_rota and onibus_novo and not (cursor and self._procurar(quadro, "inventario", "voltar_lobby")):
-            salto = self._seguir_rota(quadro, agora, onibus=True)
-            if salto or (self._pendente is None and self._prazo_fila is None):
-                return salto
-        if (self.config.rotina_aerea and not self.config.rota_baus and aereo_autorizado and not sem_controle and not replay_na_tela
+        if (self.config.rotina_aerea and aereo_autorizado and not sem_controle and not replay_na_tela
                 and self._prazo_menu is None and self._prazo_lobby is None):
             fase = self.embarque.observar(onibus=onibus_novo, asa=asa_delta)
             if fase:
@@ -1045,8 +1019,6 @@ class Fluxo:
         else:
             self.embarque.pausar()
         if (onibus_novo or asa_delta) and not replay_na_tela and self._pendente is None and self._prazo_fila is None:
-            if pode_rota and asa_delta and not cursor:
-                return self._seguir_rota(quadro, agora, hud=partida, asa=True)
             self.motivo_anti_afk = "aviso_de_onibus" if onibus_novo else "asa_delta"
             return self._mover_no_ar(quadro, agora, controle_aereo)
         if saiu_do_onibus and partida and not sem_controle and not cursor:
@@ -1061,8 +1033,6 @@ class Fluxo:
             self.motivo_anti_afk = "verificando_clique"
             acao = self._verificar_clique(quadro, agora, hud_visivel, no_onibus,
                                          partida or onibus_novo or asa_delta)
-            if not acao and pode_rota and (asa_delta or descendo) and not (no_onibus or cursor):
-                return self._seguir_rota(quadro, agora, hud=partida, asa=asa_delta)
             return acao or self._mover_no_ar(quadro, agora, controle_aereo)
         if self._bloqueado and self._alvo(quadro, self._bloqueado) is None:
             self._quadros_sem_alvo += 1
@@ -1073,8 +1043,6 @@ class Fluxo:
         if self._prazo_fila is not None:
             self.motivo_anti_afk = "aguardando_transicao_da_fila"
             acao = self._confirmar_fila(quadro, agora, partida, hud_visivel, no_onibus)
-            if not acao and pode_rota and (asa_delta or descendo) and not (no_onibus or cursor):
-                return self._seguir_rota(quadro, agora, hud=partida, asa=asa_delta)
             return acao or self._mover_no_ar(quadro, agora, controle_aereo)
         self._botoes_fila_clicados.clear()
         if self._prazo_menu is not None:
@@ -1189,14 +1157,6 @@ class Fluxo:
         elif not self._aviso_leitura and agora - self._sem_leitura_desde >= self.config.timeout_lobby:
             self._aviso_leitura = True
             return Acao("tela_nao_reconhecida")
-        if self.config.rota_baus:
-            if (pode_rota and (partida or descendo) and not cursor and not inventario_aberto
-                    and not self._movimento_exige_transicao and not self.detector.dialogo_ambiguo
-                    and not self.detector.procurar(quadro, ("voltar_lobby",), limiar=.92)):
-                return self._seguir_rota(quadro, agora, hud=partida, asa=asa_delta)
-            if self.rota is not None:
-                self.rota.pausar()
-            return None
         if not self.config.anti_afk:
             self.motivo_anti_afk = "desativado"
             return None

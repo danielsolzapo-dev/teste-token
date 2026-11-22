@@ -41,7 +41,7 @@ CONFIG = Path(os.getenv("LOCALAPPDATA", ".")) / "AutoFarmToken" / "ajustes.json"
 ARQUIVO_LOG = CONFIG.with_name("diagnostico.log")
 OPCOES = ("clicar_continuar", "fallback_cor", "sair_por_tempo", "anti_afk", "rotina_aerea",
           "atualizar_auto", "resgatar_recompensas", "notificar_tesouros", "regiao_auto",
-          "segundo_plano", "cursor_segundo_plano", "pausar_ao_obter_token", "sair_quando_sozinho", "rota_baus")
+          "segundo_plano", "cursor_segundo_plano", "pausar_ao_obter_token", "sair_quando_sozinho")
 CAMPOS = (*OPCOES, "minutos_partida", "webhook_url", "regiao_manha", "regiao_noite", "aparencia")
 ROTULOS = {
     "jogar": "Jogar Novamente", "continuar": "Continuar", "lobby_jogar": "Jogar",
@@ -116,14 +116,11 @@ def monitorar(windows, fluxo, eventos, parar, diagnostico=None, *, lobby=None):
     aguardando_foco = None
     hud_ausente_desde = None
     perda_hud_registrada = False
-    rota_sem_posicao_desde = None
-    captura_falha_rota = False
     etapa = "iniciar"
     acao = None
     try:
         if diagnostico:
             diagnostico.registrar("sessao_iniciada", versao=VERSAO, anti_afk=fluxo.config.anti_afk,
-                                  rota_baus=fluxo.config.rota_baus,
                                   saida_por_tempo=fluxo.config.sair_por_tempo,
                                   saida_quando_sozinho=fluxo.config.sair_quando_sozinho,
                                   segundo_plano=fluxo.config.segundo_plano,
@@ -232,19 +229,6 @@ def monitorar(windows, fluxo, eventos, parar, diagnostico=None, *, lobby=None):
                                    asa_delta=asa_delta, espectando=bool(bloqueio_hud), derrubado=derrubado)
                 if parar.is_set():
                     break
-                if (diagnostico and fluxo.config.rota_baus and fluxo.rota is not None
-                        and fluxo.motivo_anti_afk == "rota_baus" and fluxo.rota.fase in ("onibus", "voo", "percurso")
-                        and fluxo.rota.pos is None):
-                    if rota_sem_posicao_desde is None:
-                        rota_sem_posicao_desde = agora
-                    elif agora - rota_sem_posicao_desde >= 6 and not captura_falha_rota:
-                        salvar_captura_diagnostico(quadro, diagnostico, "rota_sem_posicao", "rota_ultimo_minimapa.jpg")
-                        from mapa_rota import recortar_minimapa
-                        salvar_captura_diagnostico(recortar_minimapa(quadro), diagnostico,
-                                                  "rota_captura_minimapa", "rota_minimapa_atual.jpg")
-                        captura_falha_rota = True
-                else:
-                    rota_sem_posicao_desde, captura_falha_rota = None, False
                 sobreviventes = fluxo.sobreviventes
                 if sobreviventes.equipe is None:
                     leitura_equipe_anterior = None
@@ -285,16 +269,6 @@ def monitorar(windows, fluxo, eventos, parar, diagnostico=None, *, lobby=None):
                                                   seta_direita=dados[7], aplicar=dados[8], dialogo_alteracoes=dados[9])
                 leituras = (True, em_fundo, hud_visivel, partida, cursor, onibus, asa_delta, derrubado, fluxo.motivo_anti_afk)
                 if diagnostico and (leituras != leituras_anteriores or agora >= proximo_registro):
-                    if fluxo.config.rota_baus and fluxo.rota is not None:
-                        rota = fluxo.rota
-                        pos = rota.pos
-                        diagnostico.registrar("rota_baus", fase=rota.fase,
-                                              ponto=rota.indice + 1 if rota.fase != "concluida" else None,
-                                              busca_local=rota.subponto,
-                                              estado=rota.status, posicao=[pos.x, pos.y] if pos else None,
-                                              confianca=round(pos.confianca, 3) if pos else None,
-                                              score_mapa=round(rota.mapa.ultima_confianca, 3),
-                                              margem_mapa=round(rota.mapa.ultima_margem, 3))
                     diagnostico.registrar("leitura", foco=not em_fundo, segundo_plano=em_fundo,
                                           hud=hud_visivel, partida=partida,
                                           cursor=cursor, onibus=onibus, asa_delta=asa_delta,
@@ -315,9 +289,7 @@ def monitorar(windows, fluxo, eventos, parar, diagnostico=None, *, lobby=None):
                           "Descendo após o salto" if fluxo.motivo_anti_afk == "movimento_aereo" else
                           "Em partida" if partida else
                           "Procurando botões")
-                if fluxo.motivo_anti_afk == "rota_baus" and fluxo.rota is not None:
-                    estado = fluxo.rota.status
-                elif fluxo.motivo_anti_afk == "aguardando_transicao_da_fila":
+                if fluxo.motivo_anti_afk == "aguardando_transicao_da_fila":
                     estado = "Aguardando transição da fila"
                 elif hud_ausente_desde is not None and fluxo.motivo_anti_afk == "hud_indisponivel":
                     estado = "HUD da partida indisponível"
@@ -388,9 +360,6 @@ def monitorar(windows, fluxo, eventos, parar, diagnostico=None, *, lobby=None):
                     captura_resgate = None
                 elif acao and (acao.tipo in ACOES_AEREAS or acao.tipo == "movimento_aereo"):
                     fluxo.embarque.registrar(acao.tipo, executada, time.monotonic())
-                if (acao and fluxo.rota is not None
-                        and (acao.tipo.startswith("rota_") or acao.tipo == "saltar_onibus")):
-                    fluxo.rota.registrar(acao.tipo, executada, time.monotonic())
                 if fluxo.partidas != contagem:
                     eventos.put(("total", fluxo.partidas))
                 prazo_saida = fluxo.prazo_saida
@@ -401,10 +370,7 @@ def monitorar(windows, fluxo, eventos, parar, diagnostico=None, *, lobby=None):
                         diagnostico.registrar("cronometro_saida", segundos_restantes=segundos)
                     prazo_anterior = prazo_saida
                 if executada:
-                    if acao.tipo.startswith("rota_"):
-                        texto = ("Segurando a tecla de interação do baú." if acao.tipo == "rota_vasculhar"
-                                 else fluxo.rota.status)
-                    elif acao.tipo.startswith("regiao_"):
+                    if acao.tipo.startswith("regiao_"):
                         texto = (f"Região confirmada · {acao.alvo.nome}." if acao.tipo == "regiao_ok" else
                                  f"A região {acao.alvo.nome} não foi confirmada. Nova tentativa em 20 min.")
                     elif acao.alvo and acao.alvo.nome.startswith("regiao_"):
@@ -709,7 +675,6 @@ class Painel:
             ("fallback_cor", "Procurar Jogar Novamente pela cor"),
             ("anti_afk", "Ativar movimento anti-AFK"),
             ("rotina_aerea", "Saltar e fechar a asa-delta com Espaço"),
-            ("rota_baus", "Pousar na ponta leste e seguir a rota dos baús"),
             ("sair_por_tempo", "Voltar ao lobby após o tempo da partida"),
             ("sair_quando_sozinho", "Voltar ao lobby se só eu restar no esquadrão ou na partida"),
             ("segundo_plano", "Executar em segundo plano (experimental)"),
@@ -717,11 +682,6 @@ class Painel:
         ):
             linha_opcao = automacao
             comando = self.salvar_saida_quando_sozinho if nome == "sair_quando_sozinho" else None
-            if nome == "rota_baus":
-                linha_opcao = ttk.Frame(automacao, style="CardInterior.TFrame")
-                linha_opcao.pack(fill="x")
-                ttk.Button(linha_opcao, text="Ver rota", command=self.mostrar_rota).pack(side="right")
-                comando = self.salvar_rota
             ttk.Checkbutton(linha_opcao, text=texto, variable=self.opcoes[nome], style=self.tema.switch,
                             command=comando).pack(fill="x")
         ttk.Frame(automacao, style="Separador.TFrame").pack(fill="x", pady=6)
@@ -774,18 +734,6 @@ class Painel:
             self.janela_replay = JanelaBaus(self.janela, self.eventos)
             self.janela_replay.bind("<Map>", lambda _: ajustar_titulo(self.janela_replay, self.config.aparencia != "rosa"))
         self.janela_replay.abrir()
-
-    def mostrar_rota(self):
-        from mapa_rota import previa_rota
-        foto = Image.fromarray(cv2.cvtColor(previa_rota(), cv2.COLOR_BGR2RGB))
-        self.mostrar_teste(foto, "1  Pouso na ponta leste     2  Praia norte     3  Praia sul", titulo="Rota de baús")
-
-    def salvar_rota(self):
-        usar = self.opcoes["rota_baus"].get()
-        self.config = replace(self.config, rota_baus=usar)
-        self._salvar_preferencias()
-        if self.fluxo is not None:
-            self.fluxo.config = replace(self.fluxo.config, rota_baus=usar)
 
     def mostrar_regiao(self):
         if self.janela_regiao and self.janela_regiao.winfo_exists():
@@ -1185,16 +1133,6 @@ class Painel:
                 cv2.drawMarker(quadro, aviso.centro_botao, (0, 0, 255), cv2.MARKER_CROSS, 15, 2)
             return quadro, aviso.nome
         detector = Detector(config=config)
-        if config.rota_baus:
-            from mapa_rota import Localizador, rumo_bussola, tecla_de_bau
-            pos = Localizador().localizar(quadro)
-            if pos is not None:
-                leitor = detector._carregar_leitor()
-                rumo = rumo_bussola(quadro, leitor)
-                detalhe = f" · bússola {rumo}°" if rumo is not None else " · bússola ilegível"
-                if tecla_de_bau(quadro, leitor) is not None:
-                    detalhe += " · comando de vasculhar visível"
-                return quadro, f"Minimapa na ilha ({pos.x:.0f}, {pos.y:.0f}) · confiança {pos.confianca:.0%}{detalhe}"
         alvo = detector.ler_contexto(quadro, "confirmar_sair")
         if alvo is None and not detector.dialogo_ambiguo:
             alvo = detector.detectar(quadro) or detector.procurar(
@@ -1348,14 +1286,6 @@ def verificar_build():
     if not callable(WindowsCapture):
         raise RuntimeError("Captura de janela ausente no pacote.")
     detector = Detector()
-    from mapa_rota import ILHA, ROTA, VIZINHANCA, previa_rota
-    from rota_baus import RotaBaus
-    preview = previa_rota()
-    if preview.size == 0 or not ILHA.is_file() or len(ROTA) < 4 or not VIZINHANCA:
-        raise RuntimeError("A rota de baús está incompleta.")
-    rota = RotaBaus()
-    if not rota.pausar() is None:
-        raise RuntimeError("Falha ao inicializar a rota de baús.")
     DetectorTesouros()
     MonitorLobby()
     if faltando := TEMPLATES.keys() - detector.templates.keys():
