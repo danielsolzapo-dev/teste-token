@@ -63,6 +63,7 @@ Os ajustes ficam em `%LOCALAPPDATA%\AutoFarmToken\ajustes.json`. A detecção de
 
 1. No Windows do vendedor, abra o [Emissor de Licenças](https://github.com/danielsolzapo-dev/teste-token/releases/latest/download/EmissorLicencas.exe). Na primeira utilização, use **Exportar backup**, escolha uma senha de pelo menos 12 caracteres e guarde o arquivo `.pem` em local separado do PC. Guarde também a senha em lugar seguro.
 2. Escolha a validade e clique em **Gerar chave de venda**. Cada clique gera uma chave nova. Copie e entregue a chave ao comprador por mensagem privada. Até o primeiro uso, quem tiver a chave pode ativá-la.
+   Para preparar um lote, clique em **Gerar várias chaves de venda**, informe a quantidade e salve o arquivo `.txt`. Cada linha contém uma chave independente com a validade selecionada. A geração em lote é para chaves de venda; licenças offline continuam exigindo um código de PC por chave.
 3. O comprador ativa a chave no PC em que vai usar o app. O servidor registra uma única máquina por chave, inclusive quando dois PCs tentam ativá-la ao mesmo tempo. O prazo começa no dia da primeira ativação e inclui o último dia, pelo horário de Brasília. Repetir a ativação no mesmo Windows recupera o comprovante com o vencimento original.
 
 Esta cópia é para testes. Use somente chaves de teste e evite distribuir os executáveis destas releases. O app de cliente continuará no repositório comercial até a migração que você solicitar.

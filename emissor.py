@@ -206,6 +206,9 @@ class Emissor:
         self.campo_dias.grid(row=1, column=1, padx=(10, 0))
         self.botao_gerar = ttk.Button(painel, command=self.gerar)
         self.botao_gerar.grid(sticky="w", pady=12)
+        self.botao_varias = ttk.Button(painel, text="Gerar várias chaves de venda",
+                                       command=self.gerar_varias)
+        self.botao_varias.grid(sticky="w", pady=(0, 12))
         ttk.Label(painel, text="Licença para enviar ao cliente").grid(sticky="w", pady=(0, 4))
         ttk.Entry(painel, textvariable=self.resultado, state="readonly", width=54).grid(sticky="ew")
         self.copiar = ttk.Button(painel, text="Copiar licença", command=self.copiar_licenca, state="disabled")
@@ -258,6 +261,32 @@ class Emissor:
         self.resultado.set(chave)
         self.situacao.set(situacao)
         self.copiar.state(["!disabled"])
+
+    def gerar_varias(self):
+        if self.offline.get():
+            messagebox.showinfo("Gerar várias chaves", "A geração em lote vale para chaves de venda. "
+                                "Para licença offline, cada chave exige o código do PC correspondente.",
+                                parent=self.raiz)
+            return
+        quantidade = simpledialog.askinteger("Gerar várias chaves", "Quantas chaves de venda deseja gerar?",
+                                             minvalue=2, maxvalue=500, parent=self.raiz)
+        if quantidade is None:
+            return
+        destino = filedialog.asksaveasfilename(
+            parent=self.raiz, title="Salvar chaves de venda", defaultextension=".txt",
+            initialfile="chaves_autofarm.txt", filetypes=[("Lista de chaves", "*.txt")])
+        if not destino:
+            return
+        try:
+            dias = duracao_em_dias(self.prazo.get(), self.dias.get())
+            chaves = [emitir_venda(dias) for _ in range(quantidade)]
+            Path(destino).write_text("\n".join(chaves) + "\n", encoding="ascii")
+        except (OSError, ValueError) as erro:
+            messagebox.showerror("Gerar várias chaves", str(erro), parent=self.raiz)
+            return
+        self.resultado.set("")
+        self.copiar.state(["disabled"])
+        self.situacao.set(f"{quantidade} chaves de venda salvas em arquivo. Guarde-o em local seguro.")
 
     def copiar_licenca(self):
         if self.resultado.get():
