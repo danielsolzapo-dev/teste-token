@@ -20,9 +20,15 @@ from pedido_discord import LIMITE_ARQUIVO, ler_pedido
 
 
 BOTAO = "autofarm:ativar:v1"
+BOTAO_WEBHOOK = "autofarm:webhook:v1"
+SERVIDOR_WEBHOOK = 1431877632382730372
+CANAL_WEBHOOK = 1574208782911672443
 PAINEL = ("**Ativar Auto Farm**\nNo Auto Farm, clique em **Gerar arquivo do PC**. "
           "Depois, clique em **Ativar** aqui e envie sua chave de compra e o arquivo .json "
           "no formulário privado.")
+PAINEL_WEBHOOK = ("**Configurar webhook do Auto Farm**\nClique no botão abaixo para criar um canal privado "
+                  "e um webhook só para você. O bot envia a URL em uma resposta visível apenas para você; "
+                  "cole-a em **Recompensas e webhook** no Auto Farm.")
 log = logging.getLogger("ativacao")
 
 
@@ -88,6 +94,17 @@ class Painel(discord.ui.View):
         await interacao.response.send_modal(Formulario(self.bot, interacao.user.id))
 
 
+class PainelWebhook(discord.ui.View):
+    def __init__(self, bot):
+        super().__init__(timeout=None)
+        self.bot = bot
+
+    @discord.ui.button(label="Criar meu canal e webhook", style=discord.ButtonStyle.success,
+                       custom_id=BOTAO_WEBHOOK)
+    async def configurar(self, interacao, _botao):
+        await self.bot.configurar_webhook(interacao)
+
+
 def ids_do_link(link):
     m = re.fullmatch(r"https://(?:www\.)?discord\.com/channels/([1-9]\d{14,19})/([1-9]\d{14,19})/?", link.strip())
     if not m:
@@ -113,6 +130,33 @@ def salvar_destino(arquivo, dados):
     temporario.replace(arquivo)
 
 
+def alvo_webhook(usuario_id):
+    return f"AutoFarm/Webhook/{int(usuario_id)}"
+
+
+def ler_destino_webhooks(arquivo):
+    try:
+        dados = json.loads(arquivo.read_text(encoding="utf-8"))
+    except FileNotFoundError:
+        return {}
+    if not isinstance(dados, dict):
+        raise ValueError("Lista de canais privados inválida.")
+    resultado = {}
+    for usuario, registro in dados.items():
+        if (not usuario.isdigit() or not isinstance(registro, dict)
+                or type(registro.get("canal")) is not int or registro["canal"] <= 0):
+            raise ValueError("Lista de canais privados inválida.")
+        resultado[usuario] = {"canal": registro["canal"]}
+    return resultado
+
+
+def salvar_destino_webhooks(arquivo, dados):
+    arquivo.parent.mkdir(parents=True, exist_ok=True)
+    temporario = arquivo.with_suffix(".tmp")
+    temporario.write_text(json.dumps(dados), encoding="utf-8")
+    temporario.replace(arquivo)
+
+
 def tem_painel(mensagem, bot_id):
     return mensagem.author.id == bot_id and any(
         getattr(componente, "custom_id", None) == BOTAO
@@ -120,20 +164,103 @@ def tem_painel(mensagem, bot_id):
     )
 
 
+def tem_painel_webhook(mensagem, bot_id):
+    return mensagem.author.id == bot_id and any(
+        getattr(componente, "custom_id", None) == BOTAO_WEBHOOK
+        for linha in mensagem.components for componente in getattr(linha, "children", ())
+    )
+
+
 class BotAtivacao(discord.Client):
-    def __init__(self, acesso, arquivo_destino):
+    def __init__(self, acesso, arquivo_destino, pasta_dados):
         intents = discord.Intents.none()
         intents.guilds = True
         super().__init__(intents=intents, allowed_mentions=discord.AllowedMentions.none())
         self.acesso = acesso
         self.arquivo_destino = arquivo_destino
+        self.pasta_dados = pasta_dados
         self.destino = ler_destino(arquivo_destino)
+        self.destino_webhook = {"servidor": SERVIDOR_WEBHOOK, "canal": CANAL_WEBHOOK}
+        self.arquivo_painel_webhook = pasta_dados / "painel_webhook.json"
+        destino_salvo = ler_destino(self.arquivo_painel_webhook)
+        if (destino_salvo.get("servidor") == SERVIDOR_WEBHOOK
+                and destino_salvo.get("canal") == CANAL_WEBHOOK):
+            self.destino_webhook["mensagem"] = destino_salvo.get("mensagem")
         self.publicar = asyncio.Lock()
+        self.publicar_webhook = asyncio.Lock()
         self.vagas = asyncio.Semaphore(4)
+        self.vagas_webhook = asyncio.Lock()
         self.nova_tentativa = None
 
     async def setup_hook(self):
         self.add_view(Painel(self))
+        self.add_view(PainelWebhook(self))
+
+    async def configurar_webhook(self, interacao):
+        if (interacao.guild_id != SERVIDOR_WEBHOOK or interacao.channel_id != CANAL_WEBHOOK
+                or not isinstance(interacao.channel, discord.TextChannel)):
+            await interacao.response.send_message("Use o botão no canal de configuração do servidor.", ephemeral=True)
+            return
+        await interacao.response.defer(ephemeral=True, thinking=True)
+        async with self.vagas_webhook:
+            try:
+                guild = interacao.guild
+                membro_bot = guild.me or await guild.fetch_member(self.user.id)
+                permissoes = interacao.channel.permissions_for(membro_bot)
+                if not (permissoes.view_channel and permissoes.manage_channels and permissoes.manage_webhooks):
+                    await interacao.followup.send(
+                        "O bot precisa de **Ver canal**, **Gerenciar canais** e **Gerenciar webhooks** "
+                        "neste canal para configurar seu espaço privado.", ephemeral=True)
+                    return
+
+                registro = ler_destino_webhooks(self.pasta_dados / "canais_webhook.json")
+                usuario = str(interacao.user.id)
+                canal = guild.get_channel(registro.get(usuario, {}).get("canal", 0))
+                url = cofre_bot.obter(alvo_webhook(interacao.user.id))
+                canal_novo = not isinstance(canal, discord.TextChannel)
+                if canal_novo:
+                    sobrescritas = {
+                        guild.default_role: discord.PermissionOverwrite(view_channel=False),
+                        interacao.user: discord.PermissionOverwrite(
+                            view_channel=True, send_messages=True, read_message_history=True, attach_files=True),
+                        membro_bot: discord.PermissionOverwrite(
+                            view_channel=True, send_messages=True, read_message_history=True,
+                            manage_webhooks=True),
+                    }
+                    nome = "autofarm-" + re.sub(r"[^a-z0-9-]+", "-", interacao.user.name.casefold()).strip("-")[:70]
+                    canal = await guild.create_text_channel(
+                        nome or f"autofarm-{interacao.user.id}", overwrites=sobrescritas,
+                        reason=f"Canal privado de webhook solicitado por {interacao.user.id}")
+                    registro[usuario] = {"canal": canal.id}
+                    salvar_destino_webhooks(self.pasta_dados / "canais_webhook.json", registro)
+                if not url:
+                    try:
+                        webhook = await canal.create_webhook(name="Auto Farm")
+                        url = webhook.url
+                        try:
+                            await webhook.send("Webhook do Auto Farm conectado. Este canal privado está pronto.",
+                                               allowed_mentions=discord.AllowedMentions.none())
+                        except discord.HTTPException:
+                            await webhook.delete(reason="Falha ao enviar a confirmação do webhook")
+                            raise
+                        cofre_bot.guardar(alvo_webhook(interacao.user.id), url)
+                    except (discord.HTTPException, OSError, ValueError):
+                        if canal_novo:
+                            await canal.delete(reason="Falha ao preparar webhook privado")
+                        raise
+                registro[usuario] = {"canal": canal.id}
+                salvar_destino_webhooks(self.pasta_dados / "canais_webhook.json", registro)
+
+                await interacao.followup.send(
+                    f"Canal privado pronto: {canal.mention}. Copie a URL abaixo para **Auto Farm → "
+                    f"Recompensas e webhook → URL do webhook**.\n||{url}||", ephemeral=True)
+            except discord.Forbidden:
+                await interacao.followup.send(
+                    "O Discord negou a criação. Confira as permissões do bot no servidor e tente novamente.",
+                    ephemeral=True)
+            except (discord.HTTPException, OSError, ValueError):
+                await interacao.followup.send(
+                    "Não consegui criar o canal e o webhook agora. Tente novamente em instantes.", ephemeral=True)
 
     def no_destino(self, interacao):
         return (bool(self.destino) and interacao.guild_id == self.destino["servidor"]
@@ -186,24 +313,60 @@ class BotAtivacao(discord.Client):
             except OSError:
                 log.error("Não foi possível salvar o destino no perfil do vendedor.")
 
+    async def garantir_painel_webhook(self):
+        async with self.publicar_webhook:
+            guild = self.get_guild(SERVIDOR_WEBHOOK)
+            canal = guild.get_channel(CANAL_WEBHOOK) if guild else None
+            if not isinstance(canal, discord.TextChannel):
+                log.info("Aguardando acesso ao canal de configuração de webhook informado.")
+                return
+            try:
+                mensagem = None
+                if self.destino_webhook.get("mensagem"):
+                    try:
+                        existente = await canal.fetch_message(self.destino_webhook["mensagem"])
+                    except discord.NotFound:
+                        pass
+                    else:
+                        if tem_painel_webhook(existente, self.user.id):
+                            mensagem = existente
+                if mensagem is None:
+                    async for anterior in canal.history(limit=100):
+                        if tem_painel_webhook(anterior, self.user.id):
+                            mensagem = anterior
+                            break
+                if mensagem is None:
+                    mensagem = await canal.send(PAINEL_WEBHOOK, view=PainelWebhook(self))
+                self.destino_webhook = {"servidor": guild.id, "canal": canal.id, "mensagem": mensagem.id}
+                salvar_destino(self.arquivo_painel_webhook, self.destino_webhook)
+                log.info("Painel de configuração de webhook publicado: %s", mensagem.jump_url)
+            except discord.Forbidden:
+                log.error("No canal de webhook, libere Ver canal, Enviar mensagens e Ler histórico.")
+            except discord.HTTPException as erro:
+                log.error("Discord indisponível ao conferir o painel de webhook (HTTP %s).", erro.status)
+            except OSError:
+                log.error("Não foi possível salvar o destino do painel de webhook.")
+
     def _repetir_publicacao(self):
         self.nova_tentativa = None
         if not self.is_closed():
             asyncio.create_task(self.garantir_painel())
 
     async def on_ready(self):
-        await self.garantir_painel()
+        await asyncio.gather(self.garantir_painel(), self.garantir_painel_webhook())
 
     async def on_guild_join(self, guild):
-        await self.garantir_painel()
+        await asyncio.gather(self.garantir_painel(), self.garantir_painel_webhook())
 
     async def on_guild_channel_create(self, canal):
         if isinstance(canal, discord.TextChannel):
-            await self.garantir_painel()
+            await asyncio.gather(self.garantir_painel(), self.garantir_painel_webhook())
 
     async def on_guild_channel_update(self, antes, depois):
         if depois == self.localizar_canal():
             await self.garantir_painel()
+        if depois.id == CANAL_WEBHOOK:
+            await self.garantir_painel_webhook()
 
 
 @contextlib.contextmanager
@@ -222,8 +385,10 @@ def instancia_unica(pasta):
 
 async def verificar_build():
     painel = Painel(None)
+    painel_webhook = PainelWebhook(None)
     estrutura = Formulario(None, 1).to_dict()
-    if not painel.is_persistent() or [c["component"]["type"] for c in estrutura["components"]] != [4, 19]:
+    if (not painel.is_persistent() or not painel_webhook.is_persistent()
+            or [c["component"]["type"] for c in estrutura["components"]] != [4, 19]):
         raise RuntimeError("O formulário de ativação não está disponível.")
 
 
@@ -251,7 +416,7 @@ def main():
                     cofre_bot.guardar(alvo, segredo)
                 elif not cofre_bot.obter(alvo):
                     raise ValueError(f"Informe a credencial: {titulo}.")
-        bot = BotAtivacao(cofre_bot.obter(cofre_bot.SERVICO), destino)
+        bot = BotAtivacao(cofre_bot.obter(cofre_bot.SERVICO), destino, pasta)
         bot.run(cofre_bot.obter(cofre_bot.TOKEN), log_handler=None)
 
 
