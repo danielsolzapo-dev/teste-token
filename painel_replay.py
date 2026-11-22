@@ -125,6 +125,7 @@ class JanelaBaus(tk.Toplevel):
 
     def ocultar(self):
         self.aberta = False
+        self.cancelar_agendamento()
         self.withdraw()
 
     def cancelar_agendamento(self):
