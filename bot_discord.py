@@ -172,13 +172,13 @@ def tem_painel_webhook(mensagem, bot_id):
 
 
 class BotAtivacao(discord.Client):
-    def __init__(self, acesso, arquivo_destino, pasta_dados):
+    def __init__(self, acesso, arquivo_destino, pasta_dados=None):
         intents = discord.Intents.none()
         intents.guilds = True
         super().__init__(intents=intents, allowed_mentions=discord.AllowedMentions.none())
         self.acesso = acesso
         self.arquivo_destino = arquivo_destino
-        self.pasta_dados = pasta_dados
+        self.pasta_dados = Path(pasta_dados) if pasta_dados is not None else Path(arquivo_destino).parent
         self.destino = ler_destino(arquivo_destino)
         self.destino_webhook = {"servidor": SERVIDOR_WEBHOOK, "canal": CANAL_WEBHOOK}
         self.arquivo_painel_webhook = pasta_dados / "painel_webhook.json"
