@@ -385,10 +385,8 @@ def instancia_unica(pasta):
 
 async def verificar_build():
     painel = Painel(None)
-    painel_webhook = PainelWebhook(None)
     estrutura = Formulario(None, 1).to_dict()
-    if (not painel.is_persistent() or not painel_webhook.is_persistent()
-            or [c["component"]["type"] for c in estrutura["components"]] != [4, 19]):
+    if not painel.is_persistent() or [c["component"]["type"] for c in estrutura["components"]] != [4, 19]:
         raise RuntimeError("O formulário de ativação não está disponível.")
 
 
