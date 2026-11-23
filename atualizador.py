@@ -20,7 +20,6 @@ DONO = "danielsolzapo-dev"
 REPOSITORIO = "teste-token"
 NOME_EXECUTAVEL = "AutoFarmTokenPirata.exe"
 URL_API = f"https://api.github.com/repos/{DONO}/{REPOSITORIO}/releases/latest"
-URL_HISTORICO = f"https://api.github.com/repos/{DONO}/{REPOSITORIO}/releases?per_page=12"
 TAMANHO_MAXIMO = 500 * 1024 * 1024
 VERSAO_RE = re.compile(r"^v?(\d+)\.(\d+)\.(\d+)$")
 SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
@@ -38,38 +37,6 @@ class Release:
     sha256: str
     tamanho: int
     pagina: str
-
-
-@dataclass(frozen=True)
-class ItemHistorico:
-    versao: str
-    publicado: str
-    notas: str
-
-
-def buscar_historico(abrir_url=None):
-    """Obtém as notas públicas das releases sem baixar nem executar arquivos."""
-    abrir_url = abrir_url or urlopen
-    try:
-        dados = json.loads(_ler_resposta(URL_HISTORICO, 1_000_000, abrir_url))
-    except ErroAtualizacao:
-        raise
-    except (URLError, TimeoutError, OSError, ValueError) as erro:
-        raise ErroAtualizacao(f"Não foi possível consultar o histórico: {erro}") from erro
-    if not isinstance(dados, list):
-        raise ErroAtualizacao("A resposta do GitHub não contém um histórico válido.")
-    itens = []
-    for item in dados[:12]:
-        if not isinstance(item, dict):
-            continue
-        tag = item.get("tag_name")
-        if not isinstance(tag, str) or not VERSAO_RE.fullmatch(tag.removeprefix("v")):
-            continue
-        versao = tag.removeprefix("v")
-        publicado = str(item.get("published_at") or "")[:10]
-        notas = item.get("body") if isinstance(item.get("body"), str) else ""
-        itens.append(ItemHistorico(versao, publicado, notas.strip()[:5000] or "Sem notas publicadas."))
-    return tuple(itens)
 
 
 def _versao_numerica(versao):

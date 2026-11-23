@@ -2,6 +2,8 @@
 
 Na versão 3.7.1, a janela principal usa dimensões menores e espaçamentos mais compactos. O conteúdo continua rolável em telas baixas.
 
+Na versão 3.7.2, o botão de histórico de versões foi removido do painel de atualizações.
+
 Aplicativo desktop independente para Windows x64. Usa capturas da tela, imagens de referência locais e OCR para reconhecer estados visíveis do Fortnite; não lê memória do jogo, injeta DLLs nem tenta ocultar entradas do anti-cheat.
 
 [Releases de teste do Auto Farm](https://github.com/danielsolzapo-dev/teste-token/releases)

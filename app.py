@@ -19,7 +19,7 @@ import numpy as np
 from PIL import Image, ImageGrab, ImageTk
 
 import baus_replay
-from atualizador import (ErroAtualizacao, baixar_atualizacao, buscar_atualizacao, buscar_historico,
+from atualizador import (ErroAtualizacao, baixar_atualizacao, buscar_atualizacao,
                          criar_script_instalacao, iniciar_instalacao, preparar_executavel)
 from diagnostico import Diagnostico
 from estado_local import carregar_estado, salvar_estado as gravar_estado_local
@@ -789,8 +789,6 @@ class Painel:
         ttk.Label(atualizacao, text="Atualizações", style="Secao.TLabel").pack(anchor="w")
         linha = ttk.Frame(atualizacao, style="CardInterior.TFrame")
         linha.pack(fill="x", pady=(4, 0))
-        self.botao_historico = self.botao_com_icone(linha, "Histórico", "diagnostico", self.abrir_historico_versoes)
-        self.botao_historico.pack(side="right", padx=(6, 0))
         self.botao_atualizacao = self.botao_com_icone(linha, "Verificar", "atualizar", self.acao_atualizacao)
         self.botao_atualizacao.pack(side="right")
         ttk.Checkbutton(linha, text="Atualizar automaticamente", variable=self.opcoes["atualizar_auto"],
@@ -1047,9 +1045,6 @@ class Painel:
                 self.botao_atualizacao.state(["!disabled"])
                 self.botao_atualizacao.configure(text="Atualizar" if valor else "Verificar")
                 self.status_atualizacao.set(f"v{valor.versao} disponível." if valor else f"v{VERSAO} atualizada.")
-            elif evento == "historico":
-                self.botao_historico.state(["!disabled"])
-                self._mostrar_historico_versoes(valor)
             elif evento == "preparada":
                 self.atualizacao_preparada = valor
             else:
@@ -1283,40 +1278,6 @@ class Painel:
                     f"Analisador de replay: {status_leitor}\nDiagnóstico: "
                     f"{'ativo' if self.diagnostico else 'indisponível'}")
         messagebox.showinfo("Status do app", mensagem, parent=self.janela)
-
-    def abrir_historico_versoes(self):
-        if getattr(self, "_historico_em_curso", False):
-            return
-        self._historico_em_curso = True
-        self.botao_historico.state(["disabled"])
-        self.botao_historico.configure(text="Carregando…")
-        Thread(target=self._consultar_historico_versoes, daemon=True).start()
-
-    def _consultar_historico_versoes(self):
-        try:
-            resultado = (True, buscar_historico())
-        except (ErroAtualizacao, OSError) as erro:
-            resultado = (False, str(erro))
-        self.eventos_atualizacao.put(("historico", resultado))
-
-    def _mostrar_historico_versoes(self, resultado):
-        self._historico_em_curso = False
-        self.botao_historico.configure(text="Histórico")
-        ok, valor = resultado
-        if not ok:
-            messagebox.showerror("Histórico de versões", valor, parent=self.janela)
-            return
-        janela = tk.Toplevel(self.janela)
-        janela.title("Histórico de versões")
-        janela.transient(self.janela)
-        janela.geometry("680x500")
-        janela.bind("<Map>", lambda _: ajustar_titulo(janela, self.config.aparencia != "rosa"))
-        area = tk.Text(janela, wrap="word", padx=12, pady=12, font=("Segoe UI", 9))
-        area.pack(fill="both", expand=True)
-        for item in valor:
-            area.insert("end", f"Auto Farm v{item.versao} · {item.publicado}\n")
-            area.insert("end", f"{item.notas}\n\n")
-        area.configure(state="disabled")
 
     def ler_opcoes(self):
         minutos = float(self.minutos.get().replace(",", "."))
