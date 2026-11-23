@@ -181,7 +181,7 @@ class BotAtivacao(discord.Client):
         self.pasta_dados = Path(pasta_dados) if pasta_dados is not None else Path(arquivo_destino).parent
         self.destino = ler_destino(arquivo_destino)
         self.destino_webhook = {"servidor": SERVIDOR_WEBHOOK, "canal": CANAL_WEBHOOK}
-        self.arquivo_painel_webhook = pasta_dados / "painel_webhook.json"
+        self.arquivo_painel_webhook = self.pasta_dados / "painel_webhook.json"
         destino_salvo = ler_destino(self.arquivo_painel_webhook)
         if (destino_salvo.get("servidor") == SERVIDOR_WEBHOOK
                 and destino_salvo.get("canal") == CANAL_WEBHOOK):
