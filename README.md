@@ -57,6 +57,10 @@ O leitor de replay é compilado a partir de uma revisão fixa do FortniteChestTr
 
 O registro fica em `%LOCALAPPDATA%\AutoFarmToken\diagnostico.log`, com até duas cópias rotativas. Ele registra estados do jogo, decisões e os comandos que o app tentou enviar. O resultado `enviada` indica que a rotina de entrada do Windows terminou. Em caso de falha na troca de região, a última captura do menu lateral ou das configurações fica no arquivo local `debug\regiao_ultima_falha.jpg`, na mesma pasta do diagnóstico.
 
+Em **Ver diagnóstico**, filtre por texto ou mostre apenas erros e copie o trecho filtrado. **Validar ajustes** confere os tempos, regiões e configuração do webhook antes de você iniciar. **Backup de ajustes** exporta e restaura as preferências; por segurança, o arquivo não inclui a URL privada do webhook. **Status do app** resume a versão, licença, sessão, atualizações, webhook, leitor de replay e diagnóstico. O botão **Histórico** consulta as notas das últimas releases do repositório de teste.
+
+No painel **Baús do replay**, use **Exportar CSV** para salvar a data, a contagem atribuída a você, a contagem do esquadrão e o nome do replay de cada análise registrada neste computador.
+
 Os ajustes ficam em `%LOCALAPPDATA%\AutoFarmToken\ajustes.json`. A detecção depende da resolução, escala e idioma da interface do jogo e pode precisar de ajustes após atualizações do Fortnite. Confirme se automação de entradas é permitida pelas regras do jogo; não use o aplicativo se isso violar as regras ou políticas aplicáveis.
 
 ## Emissão de licenças

@@ -1,9 +1,10 @@
 """Janela de contagem dos baús registrados em um replay do Fortnite."""
 
 from pathlib import Path
+import csv
 from threading import Thread
 import tkinter as tk
-from tkinter import filedialog, ttk
+from tkinter import filedialog, messagebox, ttk
 
 import baus_replay
 import historico_baus
@@ -40,6 +41,8 @@ class JanelaBaus(tk.Toplevel):
         self.ultimo.pack(side="left")
         self.escolher = ttk.Button(acoes, text="Escolher arquivo…", command=self.escolher_arquivo)
         self.escolher.pack(side="left", padx=(8, 0))
+        self.exportar = ttk.Button(acoes, text="Exportar CSV", command=self.exportar_csv)
+        self.exportar.pack(side="right")
         ttk.Label(painel, textvariable=self.arquivo, wraplength=400).pack(anchor="w", pady=(10, 6))
 
         contagens = ttk.Frame(painel)
@@ -75,6 +78,31 @@ class JanelaBaus(tk.Toplevel):
         ttk.Label(painel, text="Novos replays são verificados enquanto o Auto Farm estiver aberto.",
                   style="Info.TLabel", wraplength=400).pack(anchor="w", pady=(8, 0))
         self._atualizar_historico()
+
+    def exportar_csv(self):
+        if not self.historico:
+            messagebox.showinfo("Histórico vazio", "Analise um replay antes de exportar o histórico.", parent=self)
+            return
+        destino = filedialog.asksaveasfilename(
+            parent=self, title="Exportar histórico de baús", defaultextension=".csv",
+            initialfile="historico_baus.csv", filetypes=[("Planilha CSV", "*.csv")],
+        )
+        if not destino:
+            return
+        try:
+            with open(destino, "w", encoding="utf-8-sig", newline="") as arquivo:
+                campos = ("data", "baus_voce", "baus_esquadrao", "replay")
+                escritor = csv.DictWriter(arquivo, fieldnames=campos)
+                escritor.writeheader()
+                for item in self.historico:
+                    escritor.writerow({
+                        "data": item["dia"], "baus_voce": item["voce"],
+                        "baus_esquadrao": item["esquadrao"], "replay": item["arquivo"],
+                    })
+        except OSError as erro:
+            messagebox.showerror("Falha ao exportar", f"Não foi possível salvar o CSV.\n{erro}", parent=self)
+        else:
+            messagebox.showinfo("Exportação concluída", "O histórico foi salvo em CSV.", parent=self)
 
     def _atualizar_historico(self):
         resumo = historico_baus.resumir(self.historico)

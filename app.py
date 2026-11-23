@@ -11,14 +11,15 @@ from tempfile import TemporaryDirectory
 from threading import Event, Thread
 import time
 import tkinter as tk
-from tkinter import filedialog, font as tkfont, ttk
+from tkinter import filedialog, font as tkfont, messagebox, ttk
 import webbrowser
 
 import cv2
 import numpy as np
 from PIL import Image, ImageGrab, ImageTk
 
-from atualizador import (ErroAtualizacao, baixar_atualizacao, buscar_atualizacao,
+import baus_replay
+from atualizador import (ErroAtualizacao, baixar_atualizacao, buscar_atualizacao, buscar_historico,
                          criar_script_instalacao, iniciar_instalacao, preparar_executavel)
 from diagnostico import Diagnostico
 from estado_local import carregar_estado, salvar_estado as gravar_estado_local
@@ -770,11 +771,26 @@ class Painel:
         ttk.Label(painel, text="F6 inicia ou pausa\nF7 marca uma falha no diagnóstico durante a sessão",
                   style="Info.TLabel", wraplength=480).pack(anchor="w", pady=(6, 12))
 
+        utilitarios = ttk.LabelFrame(painel, text="Ferramentas e dados", padding=(10, 8))
+        utilitarios.pack(fill="x", pady=(0, 9))
+        self.botao_ver_diagnostico = ttk.Button(utilitarios, text="Ver diagnóstico", command=self.mostrar_diagnostico)
+        self.botao_validar = ttk.Button(utilitarios, text="Validar ajustes", command=self.validar_ajustes)
+        self.botao_backup = ttk.Button(utilitarios, text="Backup de ajustes", command=self.exportar_ajustes)
+        self.botao_restaurar = ttk.Button(utilitarios, text="Restaurar ajustes", command=self.importar_ajustes)
+        self.botao_status = ttk.Button(utilitarios, text="Status do app", command=self.mostrar_status_app)
+        for indice, botao in enumerate((self.botao_ver_diagnostico, self.botao_validar,
+                                        self.botao_backup, self.botao_restaurar, self.botao_status)):
+            utilitarios.columnconfigure(indice % 2, weight=1, uniform="utilitarios")
+            botao.grid(row=indice // 2, column=indice % 2, sticky="ew", padx=(0, 6) if indice % 2 == 0 else 0,
+                       pady=(0, 5))
+
         atualizacao = ttk.Frame(painel, style="Card.TFrame", padding=(13, 10))
         atualizacao.pack(fill="x")
         ttk.Label(atualizacao, text="Atualizações", style="Secao.TLabel").pack(anchor="w")
         linha = ttk.Frame(atualizacao, style="CardInterior.TFrame")
         linha.pack(fill="x", pady=(4, 0))
+        self.botao_historico = self.botao_com_icone(linha, "Histórico", "diagnostico", self.abrir_historico_versoes)
+        self.botao_historico.pack(side="right", padx=(6, 0))
         self.botao_atualizacao = self.botao_com_icone(linha, "Verificar", "atualizar", self.acao_atualizacao)
         self.botao_atualizacao.pack(side="right")
         ttk.Checkbutton(linha, text="Atualizar automaticamente", variable=self.opcoes["atualizar_auto"],
@@ -1031,6 +1047,9 @@ class Painel:
                 self.botao_atualizacao.state(["!disabled"])
                 self.botao_atualizacao.configure(text="Atualizar" if valor else "Verificar")
                 self.status_atualizacao.set(f"v{valor.versao} disponível." if valor else f"v{VERSAO} atualizada.")
+            elif evento == "historico":
+                self.botao_historico.state(["!disabled"])
+                self._mostrar_historico_versoes(valor)
             elif evento == "preparada":
                 self.atualizacao_preparada = valor
             else:
@@ -1089,6 +1108,215 @@ class Painel:
         self.janela.clipboard_clear()
         self.janela.clipboard_append(texto)
         self.atividade.set("Diagnóstico copiado. Cole o texto na conversa em que for relatar a falha.")
+
+    def mostrar_diagnostico(self):
+        janela = tk.Toplevel(self.janela)
+        janela.title("Diagnóstico")
+        janela.transient(self.janela)
+        janela.geometry("760x520")
+        janela.bind("<Map>", lambda _: ajustar_titulo(janela, self.config.aparencia != "rosa"))
+        painel = ttk.Frame(janela, padding=12)
+        painel.pack(fill="both", expand=True)
+        filtros = ttk.Frame(painel)
+        filtros.pack(fill="x", pady=(0, 8))
+        busca = tk.StringVar(janela)
+        somente_erros = tk.BooleanVar(janela, False)
+        ttk.Label(filtros, text="Filtrar").pack(side="left")
+        campo = ttk.Entry(filtros, textvariable=busca, width=28)
+        campo.pack(side="left", padx=(6, 12))
+        ttk.Checkbutton(filtros, text="Somente erros", variable=somente_erros).pack(side="left")
+        area = tk.Text(painel, wrap="none", height=22, state="disabled", font=("Consolas", 9))
+        rolagem_y = ttk.Scrollbar(painel, orient="vertical", command=area.yview)
+        rolagem_x = ttk.Scrollbar(painel, orient="horizontal", command=area.xview)
+        area.configure(yscrollcommand=rolagem_y.set, xscrollcommand=rolagem_x.set)
+        area.pack(side="left", fill="both", expand=True)
+        rolagem_y.pack(side="right", fill="y")
+        rolagem_x.pack(side="bottom", fill="x")
+        texto_atual = [""]
+
+        def atualizar_lista(*_):
+            termo = busca.get().strip().casefold()
+            linhas = texto_atual[0].splitlines()
+            if somente_erros.get():
+                linhas = [linha for linha in linhas if any(chave in linha.casefold()
+                          for chave in ('"evento":"erro"', 'falha', 'exception', 'traceback'))]
+            if termo:
+                linhas = [linha for linha in linhas if termo in linha.casefold()]
+            area.configure(state="normal")
+            area.delete("1.0", "end")
+            area.insert("1.0", "\n".join(linhas) if linhas else "Nenhuma linha corresponde aos filtros.")
+            area.configure(state="disabled")
+
+        def carregar():
+            try:
+                texto_atual[0] = self.diagnostico.texto() if self.diagnostico else ""
+            except OSError as erro:
+                texto_atual[0] = f"Não foi possível ler o diagnóstico: {erro}"
+            atualizar_lista()
+
+        def copiar_filtrado():
+            termo = busca.get().strip().casefold()
+            linhas = texto_atual[0].splitlines()
+            if somente_erros.get():
+                linhas = [linha for linha in linhas if any(chave in linha.casefold()
+                          for chave in ('"evento":"erro"', 'falha', 'exception', 'traceback'))]
+            if termo:
+                linhas = [linha for linha in linhas if termo in linha.casefold()]
+            self.janela.clipboard_clear()
+            self.janela.clipboard_append("\n".join(linhas))
+            messagebox.showinfo("Diagnóstico", f"{len(linhas)} linha(s) copiadas.", parent=janela)
+
+        busca.trace_add("write", atualizar_lista)
+        somente_erros.trace_add("write", atualizar_lista)
+        botoes = ttk.Frame(painel)
+        botoes.pack(fill="x", pady=(8, 0))
+        ttk.Button(botoes, text="Atualizar", command=carregar).pack(side="left")
+        ttk.Button(botoes, text="Copiar filtrado", command=copiar_filtrado).pack(side="left", padx=6)
+        carregar()
+
+    def validar_ajustes(self):
+        problemas = []
+        try:
+            config = self.ler_opcoes()
+        except (ValueError, TypeError) as erro:
+            problemas.append(str(erro))
+            config = self.config
+        if config.regiao_auto and (config.regiao_manha not in MANHA or config.regiao_noite not in NOITE):
+            problemas.append("A programação de regiões contém uma opção inválida.")
+        notificacoes = (config.resgatar_recompensas or config.notificar_tesouros)
+        if notificacoes and not config.webhook_url:
+            problemas.append("As notificações estão ativadas, mas o webhook está vazio.")
+        elif config.webhook_url:
+            try:
+                validar_url(config.webhook_url)
+            except ErroWebhook as erro:
+                problemas.append(f"URL do webhook: {erro}")
+        faltando = TEMPLATES.keys() - (self.fluxo.detector.templates.keys() if self.fluxo else set())
+        if self.fluxo and faltando:
+            problemas.append("Modelos de imagem ausentes: " + ", ".join(sorted(faltando)))
+        if problemas:
+            mensagem = "Foram encontrados ajustes para corrigir:\n\n• " + "\n• ".join(problemas)
+            self._registrar_diagnostico("validacao_ajustes", resultado="invalido", problemas=problemas)
+            messagebox.showwarning("Validar ajustes", mensagem, parent=self.janela)
+        else:
+            self._registrar_diagnostico("validacao_ajustes", resultado="valido")
+            messagebox.showinfo("Validar ajustes", "Os ajustes preenchidos estão válidos.", parent=self.janela)
+
+    def exportar_ajustes(self):
+        destino = filedialog.asksaveasfilename(
+            parent=self.janela, title="Salvar backup dos ajustes", defaultextension=".json",
+            initialfile="autofarm-ajustes-backup.json", filetypes=[("Backup JSON", "*.json")],
+        )
+        if not destino:
+            return
+        dados = asdict(self.config)
+        dados.pop("webhook_url", None)
+        try:
+            Path(destino).write_text(json.dumps({"formato": 1, "versao": VERSAO, "ajustes": dados},
+                                                 ensure_ascii=False, indent=2), encoding="utf-8")
+        except OSError as erro:
+            messagebox.showerror("Backup", f"Não foi possível salvar o arquivo.\n{erro}", parent=self.janela)
+        else:
+            messagebox.showinfo("Backup", "Backup salvo. A URL privada do webhook não foi incluída.",
+                                parent=self.janela)
+
+    def importar_ajustes(self):
+        if self.worker is not None and self.worker.is_alive():
+            messagebox.showwarning("Restaurar ajustes", "Pause a sessão antes de restaurar ajustes.", parent=self.janela)
+            return
+        origem = filedialog.askopenfilename(parent=self.janela, title="Escolher backup de ajustes",
+                                            filetypes=[("Backup JSON", "*.json")])
+        if not origem:
+            return
+        try:
+            pacote = json.loads(Path(origem).read_text(encoding="utf-8"))
+            dados = pacote.get("ajustes") if isinstance(pacote, dict) and pacote.get("formato") == 1 else None
+            if not isinstance(dados, dict):
+                raise ValueError("O arquivo não é um backup compatível do Auto Farm.")
+            permitidos = set(CAMPOS) - {"webhook_url"}
+            if set(dados) - permitidos:
+                raise ValueError("O backup contém campos desconhecidos.")
+            ajustes = {}
+            for nome in OPCOES:
+                if nome in dados:
+                    if type(dados[nome]) is not bool:
+                        raise ValueError(f"O ajuste {nome} tem um valor inválido.")
+                    ajustes[nome] = dados[nome]
+            minutos = dados.get("minutos_partida", self.config.minutos_partida)
+            if type(minutos) not in (int, float) or not 1 <= minutos <= 60:
+                raise ValueError("Minutos por partida deve ficar entre 1 e 60.")
+            ajustes["minutos_partida"] = minutos
+            pausa = dados.get("pausa_apos_minutos", self.config.pausa_apos_minutos)
+            if type(pausa) is not int or not 1 <= pausa <= 1440:
+                raise ValueError("A pausa programada deve ficar entre 1 e 1.440 minutos.")
+            ajustes["pausa_apos_minutos"] = pausa
+            for nome, opcoes in (("regiao_manha", MANHA), ("regiao_noite", NOITE),
+                                 ("aparencia", tuple(APARENCIAS))):
+                if nome in dados:
+                    if dados[nome] not in opcoes:
+                        raise ValueError(f"O ajuste {nome} não é reconhecido.")
+                    ajustes[nome] = dados[nome]
+            novo = replace(self.config, **ajustes)
+        except (OSError, ValueError, TypeError, json.JSONDecodeError) as erro:
+            messagebox.showerror("Restaurar ajustes", str(erro), parent=self.janela)
+            return
+        self.config = novo
+        for nome in OPCOES:
+            self.opcoes[nome].set(getattr(novo, nome))
+        self.minutos.set(f"{novo.minutos_partida:g}".replace(".", ","))
+        self.pausa_apos_minutos.set(str(novo.pausa_apos_minutos))
+        self.aparencia.set(APARENCIAS[novo.aparencia])
+        self.status_webhook.set("Webhook configurado" if novo.webhook_url else "Webhook desativado")
+        self._salvar_preferencias()
+        self.montar(novo.aparencia)
+        messagebox.showinfo("Restaurar ajustes", "Ajustes restaurados. O webhook atual foi preservado.",
+                            parent=self.janela)
+
+    def mostrar_status_app(self):
+        validade = f"Até {self.expira:%d/%m/%Y}" if self.expira else "Vitalícia"
+        status_webhook = "Configurado" if self.config.webhook_url else "Desativado"
+        status_leitor = "Disponível" if baus_replay.LEITOR.is_file() else "Não encontrado"
+        atualizacao = self.status_atualizacao.get()
+        estado = self.status.get()
+        mensagem = (f"Versão: {VERSAO}\nLicença: {validade}\nSessão: {estado}\n"
+                    f"Atualizações: {atualizacao}\nWebhook: {status_webhook}\n"
+                    f"Analisador de replay: {status_leitor}\nDiagnóstico: "
+                    f"{'ativo' if self.diagnostico else 'indisponível'}")
+        messagebox.showinfo("Status do app", mensagem, parent=self.janela)
+
+    def abrir_historico_versoes(self):
+        if getattr(self, "_historico_em_curso", False):
+            return
+        self._historico_em_curso = True
+        self.botao_historico.state(["disabled"])
+        self.botao_historico.configure(text="Carregando…")
+        Thread(target=self._consultar_historico_versoes, daemon=True).start()
+
+    def _consultar_historico_versoes(self):
+        try:
+            resultado = (True, buscar_historico())
+        except (ErroAtualizacao, OSError) as erro:
+            resultado = (False, str(erro))
+        self.eventos_atualizacao.put(("historico", resultado))
+
+    def _mostrar_historico_versoes(self, resultado):
+        self._historico_em_curso = False
+        self.botao_historico.configure(text="Histórico")
+        ok, valor = resultado
+        if not ok:
+            messagebox.showerror("Histórico de versões", valor, parent=self.janela)
+            return
+        janela = tk.Toplevel(self.janela)
+        janela.title("Histórico de versões")
+        janela.transient(self.janela)
+        janela.geometry("680x500")
+        janela.bind("<Map>", lambda _: ajustar_titulo(janela, self.config.aparencia != "rosa"))
+        area = tk.Text(janela, wrap="word", padx=12, pady=12, font=("Segoe UI", 9))
+        area.pack(fill="both", expand=True)
+        for item in valor:
+            area.insert("end", f"Auto Farm v{item.versao} · {item.publicado}\n")
+            area.insert("end", f"{item.notas}\n\n")
+        area.configure(state="disabled")
 
     def ler_opcoes(self):
         minutos = float(self.minutos.get().replace(",", "."))
