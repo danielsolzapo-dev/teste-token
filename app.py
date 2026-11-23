@@ -660,16 +660,16 @@ class Painel:
         cor = self.tema.paleta
         self.viewport.configure(background=cor.fundo)
         self.janela.configure(background=cor.fundo)
-        self.janela.minsize(540, 345)
-        altura = min(900, int(self.janela.winfo_screenheight() * 0.9))
-        self.janela.geometry(f"620x{altura}")
+        self.janela.minsize(500, 500)
+        altura = min(780, int(self.janela.winfo_screenheight() * 0.84))
+        self.janela.geometry(f"520x{altura}")
         ajustar_titulo(self.janela, aparencia != "rosa")
         self.conteudo = ttk.Frame(self.viewport)
         self._medidas_viewport = None
         self.janela_conteudo = self.viewport.create_window(0, 0, anchor="nw", window=self.conteudo)
         self.conteudo.bind("<Configure>", self._dimensionar_conteudo)
-        resumo = ttk.Frame(self.conteudo, style="Lateral.TFrame", padding=(24, 18, 24, 0))
-        operacoes = ttk.Frame(self.conteudo, padding=(24, 12, 24, 20))
+        resumo = ttk.Frame(self.conteudo, style="Lateral.TFrame", padding=(18, 14, 18, 0))
+        operacoes = ttk.Frame(self.conteudo, padding=(18, 10, 18, 14))
         resumo.pack(fill="x")
         operacoes.pack(fill="x")
         self._montar_sessao(resumo)
@@ -719,8 +719,8 @@ class Painel:
         return area
 
     def _montar_controles(self, painel):
-        automacao = ttk.Frame(painel, style="Card.TFrame", padding=(13, 10))
-        automacao.pack(fill="x", pady=(0, 9))
+        automacao = ttk.Frame(painel, style="Card.TFrame", padding=(11, 8))
+        automacao.pack(fill="x", pady=(0, 7))
         ttk.Label(automacao, text="Automação", style="Secao.TLabel").pack(anchor="w", pady=(0, 4))
         for nome, texto in (
             ("clicar_continuar", "Clicar em Continuar após a eliminação"),
@@ -744,8 +744,8 @@ class Painel:
         ttk.Spinbox(campo, textvariable=self.minutos, values=minutos, width=8).pack(side="left", padx=(0, 8))
         ttk.Label(campo, text="1–60 min", style="CardInfo.TLabel").pack(side="left")
 
-        programacao = ttk.Frame(painel, style="Card.TFrame", padding=(13, 10))
-        programacao.pack(fill="x", pady=(0, 9))
+        programacao = ttk.Frame(painel, style="Card.TFrame", padding=(11, 8))
+        programacao.pack(fill="x", pady=(0, 7))
         ttk.Label(programacao, text="Programação", style="Secao.TLabel").pack(anchor="w", pady=(0, 4))
         ttk.Checkbutton(programacao, text="Continuar o cronômetro Farmando ao reabrir",
                         variable=self.opcoes["continuar_farmando"], command=self.salvar_preferencia_cronometro,
@@ -784,7 +784,7 @@ class Painel:
             botao.grid(row=indice // 2, column=indice % 2, sticky="ew", padx=(0, 6) if indice % 2 == 0 else 0,
                        pady=(0, 5))
 
-        atualizacao = ttk.Frame(painel, style="Card.TFrame", padding=(13, 10))
+        atualizacao = ttk.Frame(painel, style="Card.TFrame", padding=(11, 8))
         atualizacao.pack(fill="x")
         ttk.Label(atualizacao, text="Atualizações", style="Secao.TLabel").pack(anchor="w")
         linha = ttk.Frame(atualizacao, style="CardInterior.TFrame")
