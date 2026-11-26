@@ -1330,7 +1330,18 @@ class Painel:
                 self.botao.state(["disabled"])
                 self.atividade.set(SOLTANDO_CONTROLES)
                 self.atualizar_pausa()
-                self._registrar_diagnostico("pausa_solicitada", origem=origem)
+                # Registra o contexto da origem da pausa para distinguir clique,
+                # atalho e pausa automática nos próximos diagnósticos.
+                foco_jogo = bool(self.windows.fortnite_em_foco())
+                self._registrar_diagnostico(
+                    "pausa_solicitada",
+                    origem=origem,
+                    estado_interface=self.status.get(),
+                    worker_ativo=self.worker.is_alive(),
+                    segundo_plano=self.config.segundo_plano,
+                    foco_jogo=foco_jogo,
+                    pausa_programada_pendente=self._pausa_programada_pendente,
+                )
             return
         try:
             config = self.ler_opcoes()
