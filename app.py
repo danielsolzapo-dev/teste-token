@@ -1332,7 +1332,11 @@ class Painel:
                 self.atualizar_pausa()
                 # Registra o contexto da origem da pausa para distinguir clique,
                 # atalho e pausa automática nos próximos diagnósticos.
-                foco_jogo = bool(self.windows.fortnite_em_foco())
+                try:
+                    foco_jogo = bool(self.windows.fortnite_em_foco())
+                except Exception:
+                    # Diagnóstico nunca deve impedir a pausa solicitada.
+                    foco_jogo = None
                 self._registrar_diagnostico(
                     "pausa_solicitada",
                     origem=origem,
